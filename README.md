@@ -1,19 +1,64 @@
 <div align="center">
 
-[<img src="https://avatars.githubusercontent.com/u/82473144?s=200" width="100" alt="Ghostfolio logo">](https://ghostfol.io)
+# AgentForge
 
-# Ghostfolio
+**AI-Powered Finance Agent on Ghostfolio**
 
-**Open Source Wealth Management Software**
+Built for Gauntlet Week 2 · Forked from [Ghostfolio](https://ghostfol.io)
 
-[**Ghostfol.io**](https://ghostfol.io) | [**Live Demo**](https://ghostfol.io/en/demo) | [**Ghostfolio Premium**](https://ghostfol.io/en/pricing) | [**FAQ**](https://ghostfol.io/en/faq) |
-[**Blog**](https://ghostfol.io/en/blog) | [**LinkedIn**](https://www.linkedin.com/company/ghostfolio) | [**Slack**](https://join.slack.com/t/ghostfolio/shared_invite/zt-vsaan64h-F_I0fEo5M0P88lP9ibCxFg) | [**X**](https://x.com/ghostfolio_)
-
-[![Shield: Buy me a coffee](https://img.shields.io/badge/Buy%20me%20a%20coffee-Support-yellow?logo=buymeacoffee)](https://www.buymeacoffee.com/ghostfolio)
-[![Shield: Contributions Welcome](https://img.shields.io/badge/Contributions-Welcome-limegreen.svg)](#contributing) [![Shield: Docker Pulls](https://img.shields.io/docker/pulls/ghostfolio/ghostfolio?label=Docker%20Pulls)](https://hub.docker.com/r/ghostfolio/ghostfolio)
 [![Shield: License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-orange.svg)](https://www.gnu.org/licenses/agpl-3.0)
 
 </div>
+
+**AgentForge** is a production-ready AI finance agent layered on top of Ghostfolio. It adds a conversational AI assistant (powered by LangChain + Claude/GPT-4o) that can answer questions about your portfolio, surface insights, flag risks, and execute read operations — all from a floating chat widget embedded in the Ghostfolio UI.
+
+## Architecture
+
+| Layer       | Tech                        | Port        |
+| ----------- | --------------------------- | ----------- |
+| Frontend    | Angular (Ghostfolio client) | 4200        |
+| Agent API   | NestJS + LangChain.js       | 8000        |
+| Backend API | NestJS (Ghostfolio API)     | 3333        |
+| Database    | PostgreSQL + Redis          | 5432 / 6379 |
+
+## Agent Features (Wireframe)
+
+- Floating chat widget on every page — no separate route
+- `POST /api/v1/chat` — conversational interface to your portfolio
+- `GET /api/v1/tools` — lists available agent tools
+- `GET /api/v1/insights` — proactive portfolio insights
+- `POST /api/v1/evals/run` — LangSmith eval runner
+- LLM routing: GPT-4o-mini (simple) · Claude Sonnet (complex)
+- Conversation state via Redis · Insights persisted in SQLite
+
+## Quick Start
+
+```bash
+# Start dependencies
+docker compose -f docker/docker-compose.yml up -d
+
+# Start Ghostfolio API + client
+npm run start:api
+npm run start:client
+
+# Start AgentForge agent
+npm run start:agent
+```
+
+## Development
+
+```bash
+# Build agent
+npm run build:agent
+
+# Test agent
+npm run test:agent
+
+# Smoke-test chat round-trip
+./scripts/test-chat.sh "What is my portfolio performance?"
+```
+
+---
 
 **Ghostfolio** is an open source wealth management software built with web technology. The application empowers busy people to keep track of stocks, ETFs or cryptocurrencies and make solid, data-driven investment decisions. The software is designed for personal use in continuous operation.
 

@@ -1,0 +1,67 @@
+<div class="ai-chat-widget">
+  @if (isOpen) {
+    <div class="chat-panel">
+      <div class="chat-header">
+        <span i18n>AI Assistant</span>
+        <button class="close-btn" mat-icon-button (click)="toggleOpen()">
+          <ion-icon name="close-outline" />
+        </button>
+      </div>
+
+      <div #messageList class="message-list">
+        @for (msg of messages; track $index) {
+          <div
+            class="message"
+            [ngClass]="{
+              agent: msg.role === 'agent',
+              user: msg.role === 'user'
+            }"
+          >
+            <span class="bubble">{{ msg.content }}</span>
+          </div>
+        }
+        @if (messages.length === 0 && !isLoading) {
+          <div class="empty-state">
+            <p i18n>Ask anything about your portfolio.</p>
+          </div>
+        }
+        @if (isLoading) {
+          <div class="message agent">
+            <mat-spinner diameter="20" />
+          </div>
+        }
+      </div>
+
+      <div class="input-row">
+        <mat-form-field appearance="outline" class="w-100">
+          <input
+            #messageInput
+            i18n-placeholder
+            matInput
+            placeholder="Ask about your portfolio..."
+            [(ngModel)]="inputText"
+            (keydown.enter)="onSend()"
+          />
+        </mat-form-field>
+        <button
+          color="primary"
+          mat-icon-button
+          [disabled]="!inputText || isLoading"
+          (click)="onSend()"
+        >
+          <ion-icon name="send-outline" />
+        </button>
+      </div>
+    </div>
+  }
+
+  <button
+    class="fab"
+    color="primary"
+    mat-fab
+    [attr.aria-label]="isOpen ? 'Close AI chat' : 'Open AI chat'"
+    (click)="toggleOpen()"
+  >
+    <ion-icon [name]="isOpen ? 'close-outline' : 'chatbubble-outline'" />
+  </button>
+</div>

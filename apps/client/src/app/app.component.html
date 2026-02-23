@@ -51,3 +51,7 @@
     <gf-footer class="py-4" [info]="info" [user]="user" />
   </footer>
 }
+
+@if (user) {
+  <gf-ai-chat-widget />
+}

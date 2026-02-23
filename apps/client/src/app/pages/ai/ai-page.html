@@ -1,0 +1,41 @@
+<div class="container page-content">
+  <div #messageList class="message-list">
+    @for (msg of messages; track $index) {
+      <div
+        class="message"
+        [ngClass]="{ agent: msg.role === 'agent', user: msg.role === 'user' }"
+      >
+        <span class="bubble">{{ msg.content }}</span>
+      </div>
+    }
+    @if (messages.length === 0 && !isLoading) {
+      <div class="empty-state">
+        <p i18n>Ask a question about your portfolio to get started.</p>
+      </div>
+    }
+    @if (isLoading) {
+      <div class="message agent">
+        <mat-spinner diameter="20" />
+      </div>
+    }
+  </div>
+  <div class="input-row">
+    <mat-form-field appearance="outline" class="w-100">
+      <input
+        i18n-placeholder
+        matInput
+        placeholder="Ask about your portfolio..."
+        [(ngModel)]="inputText"
+        (keydown.enter)="onSend()"
+      />
+    </mat-form-field>
+    <button
+      color="primary"
+      mat-flat-button
+      [disabled]="!inputText || isLoading"
+      (click)="onSend()"
+    >
+      <ng-container i18n>Send</ng-container>
+    </button>
+  </div>
+</div>

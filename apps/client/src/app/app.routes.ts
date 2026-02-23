@@ -23,6 +23,11 @@ export const routes: Routes = [
       import('./pages/accounts/accounts-page.routes').then((m) => m.routes)
   },
   {
+    path: internalRoutes.ai.path,
+    loadChildren: () =>
+      import('./pages/ai/ai-page.routes').then((m) => m.routes)
+  },
+  {
     path: internalRoutes.adminControl.path,
     loadChildren: () =>
       import('./pages/admin/admin-page.routes').then((m) => m.routes)

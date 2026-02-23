@@ -17,6 +17,7 @@
     "skipDefaultLibCheck": true,
     "baseUrl": ".",
     "paths": {
+      "@ghostfolio/agent/*": ["apps/agent/src/*"],
       "@ghostfolio/api/*": ["apps/api/src/*"],
       "@ghostfolio/client/*": ["apps/client/src/app/*"],
       "@ghostfolio/common/*": ["libs/common/src/lib/*"],

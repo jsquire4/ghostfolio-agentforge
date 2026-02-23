@@ -68,6 +68,11 @@ export const internalRoutes: Record<string, InternalRoute> = {
     routerLink: ['/accounts'],
     title: $localize`Accounts`
   },
+  ai: {
+    path: 'ai',
+    routerLink: ['/ai'],
+    title: $localize`AI Assistant`
+  },
   api: {
     excludeFromAssistant: true,
     path: 'api',
