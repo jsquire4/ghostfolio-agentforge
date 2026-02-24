@@ -1,17 +1,28 @@
 import { Controller, Get } from '@nestjs/common';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 
-export interface ToolMetadata {
-  description: string;
+import { ToolRegistryService } from './tool-registry.service';
+
+interface ToolMetadata {
   name: string;
+  description: string;
   parameters: Record<string, unknown>;
+  category: string;
   requiresConfirmation: boolean;
 }
 
 @Controller('v1/tools')
 export class ToolsController {
+  constructor(private readonly toolRegistry: ToolRegistryService) {}
+
   @Get()
   public getTools(): ToolMetadata[] {
-    // TODO: Return registered tool registry metadata
-    return [];
+    return this.toolRegistry.getAll().map((def) => ({
+      name: def.name,
+      description: def.description,
+      parameters: zodToJsonSchema(def.schema) as Record<string, unknown>,
+      category: def.category,
+      requiresConfirmation: def.requiresConfirmation
+    }));
   }
 }

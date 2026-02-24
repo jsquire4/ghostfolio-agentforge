@@ -1,10 +1,10 @@
 import { Module } from '@nestjs/common';
 
 import { AgentModule } from '../agent/agent.module';
-import { ChatController } from './chat.controller';
+import { ActionsController } from './actions.controller';
 
 @Module({
   imports: [AgentModule],
-  controllers: [ChatController]
+  controllers: [ActionsController]
 })
-export class ChatModule {}
+export class ActionsModule {}

@@ -1,5 +1,8 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post } from '@nestjs/common';
 import { IsOptional, IsString } from 'class-validator';
+
+import { AgentService } from '../agent/agent.service';
+import { ChatResponse } from '../common/interfaces';
 
 export class ChatRequestDto {
   @IsString()
@@ -12,17 +15,13 @@ export class ChatRequestDto {
 
 @Controller('v1/chat')
 export class ChatController {
-  @Post()
-  public chat(@Body() body: ChatRequestDto): {
-    message: string;
-    conversationId: string;
-  } {
-    // TODO: Wire up LangChain agent
-    const conversationId = body.conversationId ?? 'stub';
+  constructor(private readonly agentService: AgentService) {}
 
-    return {
-      conversationId,
-      message: `Echo [${conversationId.slice(0, 8)}]: "${body.message}"`
-    };
+  @Post()
+  public async chat(
+    @Body() body: ChatRequestDto,
+    @Headers('authorization') authHeader: string
+  ): Promise<ChatResponse> {
+    return this.agentService.chat(body, authHeader);
   }
 }
