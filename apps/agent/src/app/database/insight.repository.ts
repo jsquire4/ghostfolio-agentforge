@@ -35,7 +35,15 @@ export class InsightRepository {
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data ? (() => { try { return JSON.parse(row.data); } catch { return {}; } })() : undefined,
+      data: row.data
+        ? (() => {
+            try {
+              return JSON.parse(row.data);
+            } catch {
+              return {};
+            }
+          })()
+        : undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     }));
@@ -52,7 +60,15 @@ export class InsightRepository {
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data ? (() => { try { return JSON.parse(row.data); } catch { return {}; } })() : undefined,
+      data: row.data
+        ? (() => {
+            try {
+              return JSON.parse(row.data);
+            } catch {
+              return {};
+            }
+          })()
+        : undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     };

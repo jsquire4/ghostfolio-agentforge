@@ -4,7 +4,7 @@ import {
   VerificationResult
 } from '../common/interfaces';
 
-const HEDGING_TERMS = [
+const HEDGING_PATTERNS: RegExp[] = [
   'approximately',
   'around',
   'roughly',
@@ -13,7 +13,7 @@ const HEDGING_TERMS = [
   'might be',
   'could be',
   'i think'
-];
+].map((term) => new RegExp(`\\b${term}\\b`, 'i'));
 
 type Band = 'high' | 'medium' | 'low';
 
@@ -26,11 +26,7 @@ function downgradeBand(band: Band, levels: number): Band {
 }
 
 function countHedgingTerms(response: string): number {
-  const hedgingCount = HEDGING_TERMS.filter((term) => {
-    const pattern = new RegExp(`\\b${term}\\b`, 'i');
-    return pattern.test(response);
-  }).length;
-  return hedgingCount;
+  return HEDGING_PATTERNS.filter((pattern) => pattern.test(response)).length;
 }
 
 function baseBandFromToolCalls(toolCalls: ToolCallRecord[]): Band {

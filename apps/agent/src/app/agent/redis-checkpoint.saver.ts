@@ -462,11 +462,20 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     const entries = await Promise.all(
       matchingKeys.map(async (wKey) => {
         const raw = await this.redis.hgetall(wKey);
-        if (!raw?.['task_id'] || !raw['channel'] || !raw['type'] || !raw['data']) {
+        if (
+          !raw?.['task_id'] ||
+          !raw['channel'] ||
+          !raw['type'] ||
+          !raw['data']
+        ) {
           return null;
         }
         const value = await this.serde.loadsTyped(raw['type'], raw['data']);
-        return [raw['task_id'], raw['channel'], value] as [string, string, unknown];
+        return [raw['task_id'], raw['channel'], value] as [
+          string,
+          string,
+          unknown
+        ];
       })
     );
 

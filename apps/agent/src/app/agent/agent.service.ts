@@ -45,8 +45,7 @@ export class AgentService implements OnModuleInit {
     private readonly pendingActionsService: PendingActionsService,
     private readonly auditService: AuditService,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis
-  ) {
-  }
+  ) {}
 
   onModuleInit(): void {
     this.checkpointSaver = new RedisCheckpointSaver(this.redisClient);

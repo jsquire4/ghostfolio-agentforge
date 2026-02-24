@@ -24,6 +24,7 @@ export class GhostfolioClientService implements IGhostfolioClient {
   private readonly apiToken: string;
   private cachedServiceJwt: string | null = null;
   private serviceJwtExpiresAt: number = 0;
+  private refreshPromise: Promise<string> | null = null;
 
   constructor(config: ConfigService) {
     this.baseUrl = config.get<string>(
@@ -104,6 +105,19 @@ export class GhostfolioClientService implements IGhostfolioClient {
       return this.cachedServiceJwt;
     }
 
+    // Guard: if a refresh is already in-flight, return the same promise
+    if (this.refreshPromise) {
+      return this.refreshPromise;
+    }
+
+    this.refreshPromise = this._exchangeServiceToken().finally(() => {
+      this.refreshPromise = null;
+    });
+
+    return this.refreshPromise;
+  }
+
+  private async _exchangeServiceToken(): Promise<string> {
     const url = `${this.baseUrl}/api/v1/auth/anonymous`;
     const response = await fetch(url, {
       method: 'POST',

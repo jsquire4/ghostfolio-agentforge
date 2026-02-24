@@ -16,5 +16,4 @@ export class ToolRegistryService {
   getAll(): ToolDefinition[] {
     return Array.from(this.tools.values());
   }
-
 }

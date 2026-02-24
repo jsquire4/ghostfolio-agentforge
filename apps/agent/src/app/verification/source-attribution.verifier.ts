@@ -36,7 +36,10 @@ export class SourceAttributionVerifier implements Verifier {
     }
 
     // Combine all tool results into a single searchable string
-    const combinedResults = toolCalls.filter(tc => tc.success).map((tc) => tc.result).join(' ');
+    const combinedResults = toolCalls
+      .filter((tc) => tc.success)
+      .map((tc) => tc.result)
+      .join(' ');
 
     // Check each claim against combined results
     const unsourced = allClaims.filter((claim) => {

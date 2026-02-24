@@ -26,7 +26,9 @@ export function portfolioSummaryTool(deps: ToolDeps): ToolDefinition {
       context: UserToolContext
     ): Promise<string> => {
       try {
-        const { mode = 'analysis' } = params as { mode?: 'analysis' | 'portfolio' };
+        const { mode = 'analysis' } = params as {
+          mode?: 'analysis' | 'portfolio';
+        };
 
         if (context.abortSignal?.aborted) {
           return JSON.stringify({

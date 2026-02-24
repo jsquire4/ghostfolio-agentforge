@@ -1,5 +1,11 @@
 import { Body, Controller, Headers, Post } from '@nestjs/common';
-import { IsNotEmpty, IsOptional, IsString, IsUUID, MaxLength } from 'class-validator';
+import {
+  IsNotEmpty,
+  IsOptional,
+  IsString,
+  IsUUID,
+  MaxLength
+} from 'class-validator';
 
 import { AgentService } from '../agent/agent.service';
 import { ChatResponse } from '../common/interfaces';
