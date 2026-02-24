@@ -99,4 +99,71 @@ describe('SourceAttributionVerifier', () => {
     expect(result.warnings).toEqual([]);
     expect(result.flags).toEqual([]);
   });
+
+  it('excludes failed tool calls from combined results', async () => {
+    const response = 'Your portfolio is worth $10,000.';
+    const toolCalls: ToolCallRecord[] = [
+      makeToolCallRecord({
+        toolName: 'get-portfolio',
+        result: 'Total value: $10,000.',
+        success: false
+      })
+    ];
+
+    const result = await verifier.verify(response, toolCalls);
+
+    // Tool call exists but success: false → excluded → claims are unsourced
+    expect(result.pass).toBe(false);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('unsourced')])
+    );
+  });
+
+  it('does not match $10,000 inside $10,000,000 (negative lookahead)', async () => {
+    const response = 'Your portfolio is worth $10,000.';
+    const toolCalls: ToolCallRecord[] = [
+      makeToolCallRecord({
+        toolName: 'get-portfolio',
+        result: 'Total value: $10,000,000.'
+      })
+    ];
+
+    const result = await verifier.verify(response, toolCalls);
+
+    // $10,000 should NOT match inside $10,000,000
+    expect(result.pass).toBe(false);
+    expect(result.warnings).toEqual(
+      expect.arrayContaining([expect.stringContaining('unsourced')])
+    );
+  });
+
+  it('passes when only percentage claims exist and are sourced', async () => {
+    const response = 'Your return was 12.5% this year.';
+    const toolCalls: ToolCallRecord[] = [
+      makeToolCallRecord({
+        toolName: 'get-performance',
+        result: 'Annual return: 12.5%.'
+      })
+    ];
+
+    const result = await verifier.verify(response, toolCalls);
+
+    expect(result.pass).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('matches comma-less dollar amounts like $5000', async () => {
+    const response = 'You gained $5000 this quarter.';
+    const toolCalls: ToolCallRecord[] = [
+      makeToolCallRecord({
+        toolName: 'get-portfolio',
+        result: 'Quarterly gain: $5000.'
+      })
+    ];
+
+    const result = await verifier.verify(response, toolCalls);
+
+    expect(result.pass).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
 });

@@ -8,7 +8,7 @@ export class AuditService {
   constructor(private readonly auditRepository: AuditRepository) {}
 
   async log(entry: AuditEntry): Promise<void> {
-    this.auditRepository.log(entry);
+    await this.auditRepository.log(entry);
   }
 
   async getByUser(userId: string): Promise<AuditEntry[]> {

@@ -66,4 +66,33 @@ describe('buildSystemPrompt', () => {
     expect(result).not.toContain('base currency is');
     expect(result).not.toContain('preferred language is');
   });
+
+  it('sanitizes angle brackets from aiPromptContext', () => {
+    const ctx: UserContext = {
+      userId: 'u1',
+      aiPromptContext: 'Ignore <script>alert(1)</script> tags'
+    };
+    const result = buildSystemPrompt(ctx);
+    expect(result).not.toContain('<script>');
+    expect(result).not.toContain('</script>');
+    expect(result).toContain('script');
+  });
+
+  it('truncates aiPromptContext to 2000 chars', () => {
+    const marker = '▼';
+    const long = marker.repeat(2500);
+    const ctx: UserContext = { userId: 'u1', aiPromptContext: long };
+    const result = buildSystemPrompt(ctx);
+    const count = (result.match(/▼/g) ?? []).length;
+    expect(count).toBe(2000);
+  });
+
+  it('does not truncate aiPromptContext at exactly 2000 chars', () => {
+    const marker = 'X';
+    const exact2000 = marker.repeat(2000);
+    const ctx: UserContext = { userId: 'u1', aiPromptContext: exact2000 };
+    const result = buildSystemPrompt(ctx);
+    const count = (result.match(/X/g) ?? []).length;
+    expect(count).toBe(2000);
+  });
 });

@@ -22,7 +22,8 @@ export class ToolsController {
     return this.toolRegistry.getAll().map((def) => ({
       name: def.name,
       description: def.description,
-      parameters: zodToJsonSchema(def.schema) as Record<string, unknown>,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any -- zodToJsonSchema causes TS2589 in test env
+      parameters: zodToJsonSchema(def.schema as any) as Record<string, unknown>,
       category: def.category,
       requiresConfirmation: def.requiresConfirmation
     }));

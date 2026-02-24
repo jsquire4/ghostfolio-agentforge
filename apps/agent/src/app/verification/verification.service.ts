@@ -11,8 +11,12 @@ export class VerificationService {
   private readonly logger = new Logger(VerificationService.name);
   private readonly verifiers: Verifier[];
 
-  constructor(private readonly insightRepository: InsightRepository) {
-    const sorted = [...ALL_VERIFIERS].sort((a, b) => a.order - b.order);
+  constructor(
+    private readonly insightRepository: InsightRepository,
+    verifiersOverride?: Verifier[]
+  ) {
+    const source = verifiersOverride ?? ALL_VERIFIERS;
+    const sorted = [...source].sort((a, b) => a.order - b.order);
     const names = new Set<string>();
     for (const v of sorted) {
       if (names.has(v.name)) {

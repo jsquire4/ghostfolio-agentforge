@@ -79,6 +79,58 @@ describe('extractUserId', () => {
       'Malformed JWT: expected three dot-separated segments'
     );
   });
+
+  it('throws when the payload segment is not valid JSON', () => {
+    // Valid base64 but invalid JSON: "eyJ7" decodes to "{"
+    const invalidJsonPayload = Buffer.from('{', 'utf8').toString('base64');
+    const authHeader = `Bearer ${HEADER_SEGMENT}.${invalidJsonPayload}.${SIGNATURE_SEGMENT}`;
+    expect(() => extractUserId(authHeader)).toThrow(
+      'Malformed JWT: payload segment is not valid JSON'
+    );
+  });
+
+  it('throws when id field is empty string', () => {
+    const emptyIdPayload = Buffer.from(JSON.stringify({ id: '' })).toString(
+      'base64'
+    );
+    const jwt = `${HEADER_SEGMENT}.${emptyIdPayload}.${SIGNATURE_SEGMENT}`;
+    expect(() => extractUserId(`Bearer ${jwt}`)).toThrow(
+      'Malformed JWT: payload is missing the required `id` field'
+    );
+  });
+
+  it('throws when the JWT has four or more segments', () => {
+    const authHeader = `Bearer ${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.${SIGNATURE_SEGMENT}.extra`;
+    expect(() => extractUserId(authHeader)).toThrow(
+      'Malformed JWT: expected three dot-separated segments'
+    );
+  });
+
+  it('throws when base64 decoding fails', () => {
+    const origFrom = Buffer.from;
+    // Mock Buffer.from to throw only for the payload segment decode
+    jest.spyOn(Buffer, 'from').mockImplementation((...args: any[]) => {
+      if (args[1] === 'base64') {
+        throw new Error('Invalid base64');
+      }
+      return origFrom.apply(Buffer, args as any);
+    });
+
+    expect(() =>
+      extractUserId(
+        `Bearer ${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.${SIGNATURE_SEGMENT}`
+      )
+    ).toThrow('Malformed JWT: payload segment is not valid base64');
+
+    jest.restoreAllMocks();
+  });
+
+  it('does not verify the signature — extracts userId from any well-formed JWT', () => {
+    const tampered = `${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.totally_invalid_signature`;
+    const result = extractUserId(`Bearer ${tampered}`);
+    expect(result.userId).toBe('test-user-123');
+    expect(result.rawJwt).toBe(tampered);
+  });
 });
 
 describe('buildBearerHeader', () => {

@@ -15,7 +15,7 @@ export interface EvalResult {
 export class EvalsController {
   @Post('run')
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public runEvals(@CurrentUser() user: AuthUser): {
+  public runEvals(@CurrentUser() _user: AuthUser): {
     runId: string;
     status: string;
   } {
@@ -28,7 +28,7 @@ export class EvalsController {
 
   @Get('results')
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  public getResults(@CurrentUser() user: AuthUser): EvalResult[] {
+  public getResults(@CurrentUser() _user: AuthUser): EvalResult[] {
     // TODO: Return historical eval results
     return [];
   }

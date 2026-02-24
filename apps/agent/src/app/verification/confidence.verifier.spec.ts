@@ -110,4 +110,50 @@ describe('ConfidenceVerifier', () => {
     );
     expect(result.flags).toEqual([]);
   });
+
+  it('returns medium confidence with exactly 2 tool calls (boundary below 3)', async () => {
+    const result = await verifier.verify(
+      'Your portfolio returned 12% this year.',
+      [
+        makeToolCallRecord({ toolName: 'get_portfolio' }),
+        makeToolCallRecord({ toolName: 'get_holdings' })
+      ]
+    );
+
+    // 2 tool calls = medium (< 3), no hedging → stays medium → no warning
+    expect(result.pass).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('counts failed tool calls toward total', async () => {
+    const result = await verifier.verify(
+      'Your portfolio returned 12% this year.',
+      [
+        makeToolCallRecord({ toolName: 'get_portfolio', success: false }),
+        makeToolCallRecord({ toolName: 'get_holdings', success: false }),
+        makeToolCallRecord({ toolName: 'get_performance', success: false })
+      ]
+    );
+
+    // 3 tool calls (even if failed) = high band, no hedging → no warning
+    expect(result.pass).toBe(true);
+    expect(result.warnings).toEqual([]);
+  });
+
+  it('clamps at low band with 4+ hedging terms — does not underflow', async () => {
+    const result = await verifier.verify(
+      'I think approximately around estimated values might be correct.',
+      [
+        makeToolCallRecord({ toolName: 'get_portfolio' }),
+        makeToolCallRecord({ toolName: 'get_holdings' }),
+        makeToolCallRecord({ toolName: 'get_performance' })
+      ]
+    );
+
+    // 3 tool calls = high, 4 hedging terms (think, approximately, around, estimated) → clamps at low
+    expect(result.pass).toBe(true);
+    expect(result.warnings).toContain(
+      'Low confidence response — limited tool verification and hedging language detected.'
+    );
+  });
 });
