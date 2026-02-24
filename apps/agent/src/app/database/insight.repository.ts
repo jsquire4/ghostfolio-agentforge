@@ -1,0 +1,60 @@
+import { Injectable } from '@nestjs/common';
+
+import { InsightRecord } from '../common/interfaces';
+import { DatabaseService } from './database.service';
+
+@Injectable()
+export class InsightRepository {
+  constructor(private readonly db: DatabaseService) {}
+
+  insert(record: InsightRecord): void {
+    const stmt = this.db.getDb().prepare(
+      `INSERT INTO insights (id, userId, category, summary, data, generated_at, expires_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+    stmt.run(
+      record.id,
+      record.userId,
+      record.category,
+      record.summary,
+      record.data ? JSON.stringify(record.data) : '{}',
+      record.createdAt,
+      record.expiresAt ?? null
+    );
+  }
+
+  getByUser(userId: string): InsightRecord[] {
+    const rows = this.db
+      .getDb()
+      .prepare(
+        `SELECT * FROM insights WHERE userId = ? ORDER BY generated_at DESC`
+      )
+      .all(userId) as any[];
+    return rows.map((row) => ({
+      id: row.id,
+      userId: row.userId,
+      category: row.category,
+      summary: row.summary,
+      data: row.data ? JSON.parse(row.data) : undefined,
+      createdAt: row.generated_at,
+      expiresAt: row.expires_at ?? undefined
+    }));
+  }
+
+  getById(id: string): InsightRecord | undefined {
+    const row = this.db
+      .getDb()
+      .prepare(`SELECT * FROM insights WHERE id = ?`)
+      .get(id) as any;
+    if (!row) return undefined;
+    return {
+      id: row.id,
+      userId: row.userId,
+      category: row.category,
+      summary: row.summary,
+      data: row.data ? JSON.parse(row.data) : undefined,
+      createdAt: row.generated_at,
+      expiresAt: row.expires_at ?? undefined
+    };
+  }
+}

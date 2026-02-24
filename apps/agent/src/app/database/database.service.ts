@@ -6,17 +6,8 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import Database from 'better-sqlite3';
-import { randomUUID } from 'crypto';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
-
-export interface Insight {
-  category: string;
-  data: Record<string, unknown>;
-  generatedAt: string;
-  id: string;
-  summary: string;
-}
 
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
@@ -46,6 +37,40 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
+    try {
+      this.db.exec(
+        `ALTER TABLE insights ADD COLUMN userId TEXT NOT NULL DEFAULT ''`
+      );
+    } catch {}
+    try {
+      this.db.exec(`ALTER TABLE insights ADD COLUMN expires_at TEXT`);
+    } catch {}
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS audit_log (
+        id         TEXT PRIMARY KEY,
+        userId     TEXT NOT NULL,
+        action     TEXT NOT NULL,
+        toolName   TEXT,
+        params     TEXT,
+        result     TEXT,
+        timestamp  TEXT NOT NULL,
+        durationMs INTEGER,
+        metadata   TEXT
+      )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS feedback (
+        id             TEXT PRIMARY KEY,
+        userId         TEXT NOT NULL,
+        conversationId TEXT NOT NULL,
+        rating         TEXT NOT NULL,
+        correction     TEXT,
+        createdAt      TEXT NOT NULL
+      )
+    `);
+
     this.logger.log(`SQLite connected: ${dbPath}`);
   }
 
@@ -53,43 +78,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.db?.close();
   }
 
-  public insertInsight(insight: Omit<Insight, 'id' | 'generatedAt'>): Insight {
-    const row: Insight = {
-      ...insight,
-      generatedAt: new Date().toISOString(),
-      id: randomUUID()
-    };
-
-    this.db
-      .prepare(
-        `INSERT INTO insights (id, category, summary, data, generated_at)
-         VALUES (@id, @category, @summary, @data, @generatedAt)`
-      )
-      .run({ ...row, data: JSON.stringify(row.data) });
-
-    return row;
-  }
-
-  public getInsights(): Insight[] {
-    const rows = this.db
-      .prepare(
-        `SELECT id, category, summary, data, generated_at as generatedAt
-         FROM insights ORDER BY generated_at DESC`
-      )
-      .all() as (Omit<Insight, 'data'> & { data: string })[];
-
-    return rows.map((r) => ({ ...r, data: JSON.parse(r.data) }));
-  }
-
-  public getInsightById(id: string): Insight | undefined {
-    const row = this.db
-      .prepare(
-        `SELECT id, category, summary, data, generated_at as generatedAt
-         FROM insights WHERE id = ?`
-      )
-      .get(id) as (Omit<Insight, 'data'> & { data: string }) | undefined;
-
-    if (!row) return undefined;
-    return { ...row, data: JSON.parse(row.data) };
+  public getDb(): Database.Database {
+    return this.db;
   }
 }

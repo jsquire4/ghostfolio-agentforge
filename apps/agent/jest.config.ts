@@ -2,6 +2,7 @@
 export default {
   displayName: 'agent',
   globals: {},
+  roots: ['<rootDir>/src'],
   transform: {
     '^.+\\.[tj]s$': [
       'ts-jest',
