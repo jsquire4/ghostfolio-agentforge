@@ -54,6 +54,10 @@ export class PendingActionsService {
 
     const action = JSON.parse(data) as PendingAction;
     action.status = status;
-    await this.redis.hset(key, 'action', JSON.stringify(action));
+
+    const pipeline = this.redis.pipeline();
+    pipeline.hset(key, 'action', JSON.stringify(action));
+    pipeline.expire(key, this.DEFAULT_TTL_SECONDS);
+    await pipeline.exec();
   }
 }

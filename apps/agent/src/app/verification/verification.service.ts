@@ -30,7 +30,7 @@ export class VerificationService {
         allWarnings.push(...result.warnings);
         allFlags.push(...result.flags);
       } catch (error) {
-        const name = verifier.constructor?.name ?? 'UnknownVerifier';
+        const name = verifier.name ?? 'UnknownVerifier';
         const msg = error instanceof Error ? error.message : String(error);
         this.logger.warn(`Verifier "${name}" threw — skipping: ${msg}`);
       }

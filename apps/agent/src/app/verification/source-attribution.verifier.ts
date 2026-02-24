@@ -36,12 +36,14 @@ export class SourceAttributionVerifier implements Verifier {
     }
 
     // Combine all tool results into a single searchable string
-    const combinedResults = toolCalls.map((tc) => tc.result).join(' ');
+    const combinedResults = toolCalls.filter(tc => tc.success).map((tc) => tc.result).join(' ');
 
     // Check each claim against combined results
-    const unsourced = allClaims.filter(
-      (claim) => !combinedResults.includes(claim)
-    );
+    const unsourced = allClaims.filter((claim) => {
+      const escaped = claim.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      // Negative lookahead prevents $10,000 matching inside $10,000,000
+      return !new RegExp(`${escaped}(?![\\d,])`).test(combinedResults);
+    });
 
     if (unsourced.length > 0) {
       return {

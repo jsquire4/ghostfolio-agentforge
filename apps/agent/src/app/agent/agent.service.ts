@@ -3,7 +3,14 @@ import { tool } from '@langchain/core/tools';
 import { isInterrupted, INTERRUPT, Command } from '@langchain/langgraph';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { ChatOpenAI } from '@langchain/openai';
-import { Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import {
+  ForbiddenException,
+  Inject,
+  Injectable,
+  Logger,
+  NotFoundException,
+  OnModuleInit
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
@@ -238,14 +245,14 @@ export class AgentService implements OnModuleInit {
 
     const stored = await this.pendingActionsService.get(actionId);
     if (!stored) {
-      throw new Error('Action not found or expired');
+      throw new NotFoundException('Action not found or expired');
     }
 
     const { action, threadId } = stored;
 
     // Verify the action belongs to the requesting user
-    if (!threadId.startsWith(`${userId}:`)) {
-      throw new Error('Forbidden — action does not belong to this user');
+    if (threadId.split(':')[0] !== userId) {
+      throw new ForbiddenException('Action does not belong to this user');
     }
 
     const conversationId = threadId.split(':').slice(1).join(':');
@@ -322,7 +329,36 @@ export class AgentService implements OnModuleInit {
         );
       });
 
-      const systemPrompt = buildSystemPrompt({ userId });
+      let currency: string | undefined;
+      let language: string | undefined;
+      let aiPromptContext: string | undefined;
+
+      try {
+        const user = await this.ghostfolioClient.get<{
+          settings: { baseCurrency?: string; language?: string };
+        }>('/api/v1/user', { mode: 'user', jwt: rawJwt });
+        currency = user.settings?.baseCurrency;
+        language = user.settings?.language;
+      } catch {
+        // User context load failed — proceed with defaults
+      }
+
+      try {
+        const prompt = await this.ghostfolioClient.get<{ prompt: string }>(
+          '/api/v1/ai/prompt/analysis',
+          { mode: 'user', jwt: rawJwt }
+        );
+        aiPromptContext = prompt.prompt;
+      } catch {
+        // AI prompt context load failed — proceed without it
+      }
+
+      const systemPrompt = buildSystemPrompt({
+        userId,
+        currency,
+        language,
+        aiPromptContext
+      });
 
       const agent = createReactAgent({
         llm: this.llm,

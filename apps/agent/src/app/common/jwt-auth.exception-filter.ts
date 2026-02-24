@@ -21,7 +21,7 @@ export class JwtAuthExceptionFilter implements ExceptionFilter {
 
     // Check for auth errors from extractUserId()
     const isAuthError =
-      /^(Authorization header|JWT payload|Bearer token)/i.test(message);
+      /^(Authorization header|Malformed JWT|Bearer token)/i.test(message);
 
     if (isAuthError) {
       this.logger.warn(`Auth error: ${message}`);

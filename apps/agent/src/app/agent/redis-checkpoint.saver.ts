@@ -453,24 +453,23 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
     if (matchingKeys.length === 0) return [];
 
-    const results: [string, string, unknown][] = [];
+    matchingKeys.sort((a, b) => {
+      const idxA = parseInt(a.split(':').pop() ?? '0', 10);
+      const idxB = parseInt(b.split(':').pop() ?? '0', 10);
+      return idxA - idxB;
+    });
 
-    await Promise.all(
+    const entries = await Promise.all(
       matchingKeys.map(async (wKey) => {
         const raw = await this.redis.hgetall(wKey);
-        if (
-          !raw?.['task_id'] ||
-          !raw['channel'] ||
-          !raw['type'] ||
-          !raw['data']
-        ) {
-          return;
+        if (!raw?.['task_id'] || !raw['channel'] || !raw['type'] || !raw['data']) {
+          return null;
         }
         const value = await this.serde.loadsTyped(raw['type'], raw['data']);
-        results.push([raw['task_id'], raw['channel'], value]);
+        return [raw['task_id'], raw['channel'], value] as [string, string, unknown];
       })
     );
 
-    return results;
+    return entries.filter((e): e is [string, string, unknown] => e !== null);
   }
 }

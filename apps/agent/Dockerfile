@@ -13,6 +13,9 @@ COPY dist/apps/agent/ ./
 
 RUN npm install --omit=dev
 
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
+
 EXPOSE 8000
 
 CMD ["node", "main.js"]
