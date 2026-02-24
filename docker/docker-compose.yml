@@ -83,6 +83,8 @@ services:
     restart: unless-stopped
     env_file:
       - ../.env
+    environment:
+      - LANGCHAIN_CALLBACKS_BACKGROUND=true
     ports:
       - 8000:8000
     depends_on:

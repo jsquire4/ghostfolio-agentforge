@@ -6,7 +6,7 @@ COPY package*.json ./
 RUN npm ci --ignore-scripts
 
 COPY . .
-RUN npx nx build agent:build:production
+RUN npx nx run agent:build:production
 
 # ---- Runtime ----
 FROM node:20-alpine

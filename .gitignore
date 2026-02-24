@@ -42,3 +42,16 @@ testem.log
 # System Files
 .DS_Store
 Thumbs.db
+
+# Local / project-specific
+.claude/
+data/
+presearch.md
+G4 Week 2 - AgentForge.pdf
+AgentForge_Requirements.md
+AgentForge_Stack_Explanation.md
+implementation-plan.md
+plan-for-implementation-plan.md
+new-gfaf-agent-tool.md
+*.Zone.Identifier
+*:Zone.Identifier
