@@ -364,7 +364,8 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
     const tKeysKey = threadKeysKey(threadId);
     const pipeline = this.redis.pipeline();
 
-    await Promise.all(
+    // Pre-compute serialization and exists checks in parallel
+    const prepared = await Promise.all(
       writes.map(async ([channel, value], idx) => {
         const writeIdx =
           channel in WRITES_IDX_MAP
@@ -376,22 +377,29 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
         // Do not overwrite a non-negative (regular) write that already exists.
         if (writeIdx >= 0) {
           const exists = await this.redis.exists(wKey);
-          if (exists) return;
+          if (exists) return null;
         }
 
         const [wType, wData] = await this.serde.dumpsTyped(value);
-
-        pipeline.hset(wKey, {
-          task_id: taskId,
-          channel,
-          type: wType,
-          data: Buffer.isBuffer(wData) ? wData : Buffer.from(wData)
-        });
-        pipeline.expire(wKey, TTL_SECONDS);
-        pipeline.sadd(tKeysKey, wKey);
-        pipeline.expire(tKeysKey, TTL_SECONDS);
+        return { wKey, taskId, channel, wType, wData };
       })
     );
+
+    // Build pipeline synchronously — no interleaving
+    for (const entry of prepared) {
+      if (!entry) continue;
+      pipeline.hset(entry.wKey, {
+        task_id: entry.taskId,
+        channel: entry.channel,
+        type: entry.wType,
+        data: Buffer.isBuffer(entry.wData)
+          ? entry.wData
+          : Buffer.from(entry.wData)
+      });
+      pipeline.expire(entry.wKey, TTL_SECONDS);
+      pipeline.sadd(tKeysKey, entry.wKey);
+      pipeline.expire(tKeysKey, TTL_SECONDS);
+    }
 
     await pipeline.exec();
   }

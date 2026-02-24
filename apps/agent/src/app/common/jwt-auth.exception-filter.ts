@@ -2,19 +2,12 @@ import {
   ArgumentsHost,
   Catch,
   ExceptionFilter,
+  HttpException,
   HttpStatus,
   Logger
 } from '@nestjs/common';
 import { Response } from 'express';
 
-/**
- * Global exception filter that catches JWT extraction errors from extractUserId()
- * and returns a consistent 401 response. Registered as APP_FILTER in AppModule.
- *
- * Any error whose message includes 'Authorization', 'JWT', 'token', or 'Bearer'
- * (case-insensitive) is treated as an auth error → 401.
- * All other errors are re-thrown for NestJS default handling.
- */
 @Catch()
 export class JwtAuthExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(JwtAuthExceptionFilter.name);
@@ -26,7 +19,9 @@ export class JwtAuthExceptionFilter implements ExceptionFilter {
     const message =
       exception instanceof Error ? exception.message : String(exception);
 
-    const isAuthError = /authorization|jwt|token|bearer/i.test(message);
+    // Check for auth errors from extractUserId()
+    const isAuthError =
+      /^(Authorization header|JWT payload|Bearer token)/i.test(message);
 
     if (isAuthError) {
       this.logger.warn(`Auth error: ${message}`);
@@ -37,7 +32,22 @@ export class JwtAuthExceptionFilter implements ExceptionFilter {
       return;
     }
 
-    // Re-throw non-auth errors for default NestJS handling
-    throw exception;
+    // Pass through NestJS HttpExceptions (validation errors, 404s, etc.)
+    if (exception instanceof HttpException) {
+      const status = exception.getStatus();
+      const body = exception.getResponse();
+      response.status(status).json(body);
+      return;
+    }
+
+    // Fallback for unexpected errors — never re-throw from a @Catch() filter
+    this.logger.error(
+      `Unhandled error: ${message}`,
+      exception instanceof Error ? exception.stack : undefined
+    );
+    response.status(HttpStatus.INTERNAL_SERVER_ERROR).json({
+      statusCode: 500,
+      message: 'Internal server error'
+    });
   }
 }

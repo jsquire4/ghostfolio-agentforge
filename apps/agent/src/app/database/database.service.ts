@@ -41,10 +41,16 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       this.db.exec(
         `ALTER TABLE insights ADD COLUMN userId TEXT NOT NULL DEFAULT ''`
       );
-    } catch {}
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (!msg.includes('duplicate column name')) throw e;
+    }
     try {
       this.db.exec(`ALTER TABLE insights ADD COLUMN expires_at TEXT`);
-    } catch {}
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (!msg.includes('duplicate column name')) throw e;
+    }
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS audit_log (

@@ -183,7 +183,7 @@ export class AgentService implements OnModuleInit {
 
           return {
             message: '',
-            conversationId: threadId,
+            conversationId,
             toolCalls: records,
             pendingConfirmations: [pendingAction],
             warnings: [],
@@ -209,7 +209,7 @@ export class AgentService implements OnModuleInit {
 
       return {
         message: agentResponse,
-        conversationId: threadId,
+        conversationId,
         toolCalls: records,
         pendingConfirmations: [],
         warnings,
@@ -220,7 +220,7 @@ export class AgentService implements OnModuleInit {
       return {
         message:
           'I encountered an error processing your request. Please try again.',
-        conversationId: threadId,
+        conversationId,
         toolCalls: records,
         pendingConfirmations: [],
         warnings: [],
@@ -248,6 +248,7 @@ export class AgentService implements OnModuleInit {
       throw new Error('Forbidden — action does not belong to this user');
     }
 
+    const conversationId = threadId.split(':').slice(1).join(':');
     const timestamp = new Date().toISOString();
 
     if (!approved) {
@@ -262,7 +263,7 @@ export class AgentService implements OnModuleInit {
       });
       return {
         message: 'Action cancelled.',
-        conversationId: threadId,
+        conversationId,
         toolCalls: [],
         pendingConfirmations: [],
         warnings: [],
@@ -291,66 +292,82 @@ export class AgentService implements OnModuleInit {
       auth: { mode: 'user', jwt: rawJwt }
     };
 
-    const langchainTools = this.toolRegistry.getAll().map((def) => {
-      return tool(
-        async (params: unknown) => {
-          const start = Date.now();
-          const result = await def.execute(params, toolContext);
-          let success = true;
-          try {
-            success = !(JSON.parse(result) as { error?: string }).error;
-          } catch {
-            // non-JSON result is still success
+    try {
+      const langchainTools = this.toolRegistry.getAll().map((def) => {
+        return tool(
+          async (params: unknown) => {
+            const start = Date.now();
+            const result = await def.execute(params, toolContext);
+            let success = true;
+            try {
+              success = !(JSON.parse(result) as { error?: string }).error;
+            } catch {
+              // non-JSON result is still success
+            }
+            records.push({
+              toolName: def.name,
+              params,
+              result,
+              calledAt: new Date().toISOString(),
+              durationMs: Date.now() - start,
+              success
+            });
+            return result;
+          },
+          {
+            name: def.name,
+            description: def.description,
+            schema: def.schema
           }
-          records.push({
-            toolName: def.name,
-            params,
-            result,
-            calledAt: new Date().toISOString(),
-            durationMs: Date.now() - start,
-            success
-          });
-          return result;
-        },
-        {
-          name: def.name,
-          description: def.description,
-          schema: def.schema
-        }
+        );
+      });
+
+      const systemPrompt = buildSystemPrompt({ userId });
+
+      const agent = createReactAgent({
+        llm: this.llm,
+        tools: langchainTools,
+        prompt: systemPrompt,
+        checkpointSaver: this.checkpointSaver
+      });
+
+      const result = await agent.invoke(
+        new Command({ resume: action.proposedParams }),
+        { configurable: { thread_id: threadId } }
       );
-    });
 
-    const agent = createReactAgent({
-      llm: this.llm,
-      tools: langchainTools,
-      checkpointSaver: this.checkpointSaver
-    });
+      const messages = result.messages ?? [];
+      const lastMessage = messages[messages.length - 1];
+      const agentResponse =
+        typeof lastMessage?.content === 'string'
+          ? lastMessage.content
+          : JSON.stringify(lastMessage?.content ?? '');
 
-    const result = await agent.invoke(
-      new Command({ resume: action.proposedParams }),
-      { configurable: { thread_id: threadId } }
-    );
+      const { warnings, flags } = await this.verificationService.runAll(
+        agentResponse,
+        records,
+        userId
+      );
 
-    const messages = result.messages ?? [];
-    const lastMessage = messages[messages.length - 1];
-    const agentResponse =
-      typeof lastMessage?.content === 'string'
-        ? lastMessage.content
-        : JSON.stringify(lastMessage?.content ?? '');
-
-    const { warnings, flags } = await this.verificationService.runAll(
-      agentResponse,
-      records,
-      userId
-    );
-
-    return {
-      message: agentResponse,
-      conversationId: threadId,
-      toolCalls: records,
-      pendingConfirmations: [],
-      warnings,
-      flags
-    };
+      return {
+        message: agentResponse,
+        conversationId,
+        toolCalls: records,
+        pendingConfirmations: [],
+        warnings,
+        flags
+      };
+    } catch (err) {
+      this.logger.error(`resume() error for user ${userId}: ${err}`);
+      return {
+        message:
+          'I encountered an error processing your request. Please try again.',
+        conversationId,
+        toolCalls: records,
+        pendingConfirmations: [],
+        warnings: [],
+        flags: []
+      };
+    }
   }
 }

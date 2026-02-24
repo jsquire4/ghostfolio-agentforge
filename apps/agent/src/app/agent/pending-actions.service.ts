@@ -16,12 +16,16 @@ export class PendingActionsService {
       action: JSON.stringify(action),
       threadId
     };
-    await this.redis.hset(key, data);
-
-    // Set TTL based on expiresAt or default
     const expiresAt = new Date(action.expiresAt).getTime();
     const ttlSeconds = Math.max(1, Math.floor((expiresAt - Date.now()) / 1000));
-    await this.redis.expire(key, ttlSeconds || this.DEFAULT_TTL_SECONDS);
+    const ttl = Number.isFinite(ttlSeconds)
+      ? ttlSeconds
+      : this.DEFAULT_TTL_SECONDS;
+
+    const pipeline = this.redis.pipeline();
+    pipeline.hset(key, data);
+    pipeline.expire(key, ttl);
+    await pipeline.exec();
   }
 
   async get(

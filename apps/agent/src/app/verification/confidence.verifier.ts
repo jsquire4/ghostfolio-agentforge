@@ -26,14 +26,11 @@ function downgradeBand(band: Band, levels: number): Band {
 }
 
 function countHedgingTerms(response: string): number {
-  const lower = response.toLowerCase();
-  let count = 0;
-  for (const term of HEDGING_TERMS) {
-    if (lower.includes(term)) {
-      count++;
-    }
-  }
-  return count;
+  const hedgingCount = HEDGING_TERMS.filter((term) => {
+    const pattern = new RegExp(`\\b${term}\\b`, 'i');
+    return pattern.test(response);
+  }).length;
+  return hedgingCount;
 }
 
 function baseBandFromToolCalls(toolCalls: ToolCallRecord[]): Band {
