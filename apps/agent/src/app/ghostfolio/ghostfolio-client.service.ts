@@ -31,7 +31,13 @@ export class GhostfolioClientService implements IGhostfolioClient {
       'GHOSTFOLIO_BASE_URL',
       'http://localhost:3333'
     );
-    this.apiToken = config.get<string>('GHOSTFOLIO_API_TOKEN', '');
+    const token = config.get<string>('GHOSTFOLIO_API_TOKEN', '');
+    if (!token) {
+      throw new Error(
+        'GHOSTFOLIO_API_TOKEN is not configured — agent cannot authenticate with Ghostfolio'
+      );
+    }
+    this.apiToken = token;
   }
 
   async get<T>(path: string, auth: GhostfolioAuth): Promise<T> {

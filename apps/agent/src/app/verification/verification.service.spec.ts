@@ -1,16 +1,6 @@
+import { makeToolCallRecord } from '../../test-fixtures';
 import { ToolCallRecord } from '../common/interfaces';
 import { VerificationService } from './verification.service';
-
-function makeRecord(result: string): ToolCallRecord {
-  return {
-    toolName: 'test_tool',
-    params: {},
-    result,
-    calledAt: new Date().toISOString(),
-    durationMs: 100,
-    success: true
-  };
-}
 
 describe('VerificationService', () => {
   let service: VerificationService;
@@ -91,9 +81,18 @@ describe('VerificationService', () => {
     // 3 tool calls with no hedging => confidence is high, no warning
     const response = 'Here is a general overview of your account settings.';
     const toolCalls: ToolCallRecord[] = [
-      makeRecord('Account info loaded'),
-      makeRecord('Settings retrieved'),
-      makeRecord('Preferences loaded')
+      makeToolCallRecord({
+        toolName: 'account_info',
+        result: 'Account info loaded'
+      }),
+      makeToolCallRecord({
+        toolName: 'settings',
+        result: 'Settings retrieved'
+      }),
+      makeToolCallRecord({
+        toolName: 'preferences',
+        result: 'Preferences loaded'
+      })
     ];
 
     const result = await service.runAll(response, toolCalls, 'user-4');

@@ -1,6 +1,8 @@
-import { Controller, Headers, Param, Post } from '@nestjs/common';
+import { Controller, Param, Post } from '@nestjs/common';
 
 import { AgentService } from '../agent/agent.service';
+import { AuthUser } from '../common/auth.types';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChatResponse } from '../common/interfaces';
 
 @Controller('v1/actions')
@@ -10,16 +12,16 @@ export class ActionsController {
   @Post(':id/approve')
   public async approve(
     @Param('id') id: string,
-    @Headers('authorization') authHeader: string
+    @CurrentUser() user: AuthUser
   ): Promise<ChatResponse> {
-    return this.agentService.resume(id, true, authHeader);
+    return this.agentService.resume(id, true, user.userId, user.rawJwt);
   }
 
   @Post(':id/reject')
   public async reject(
     @Param('id') id: string,
-    @Headers('authorization') authHeader: string
+    @CurrentUser() user: AuthUser
   ): Promise<ChatResponse> {
-    return this.agentService.resume(id, false, authHeader);
+    return this.agentService.resume(id, false, user.userId, user.rawJwt);
   }
 }

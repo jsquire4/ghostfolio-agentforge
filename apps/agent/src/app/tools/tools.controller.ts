@@ -1,6 +1,7 @@
 import { Controller, Get } from '@nestjs/common';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 
+import { Public } from '../common/decorators/public.decorator';
 import { ToolRegistryService } from './tool-registry.service';
 
 interface ToolMetadata {
@@ -11,6 +12,7 @@ interface ToolMetadata {
   requiresConfirmation: boolean;
 }
 
+@Public()
 @Controller('v1/tools')
 export class ToolsController {
   constructor(private readonly toolRegistry: ToolRegistryService) {}

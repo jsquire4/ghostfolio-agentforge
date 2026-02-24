@@ -9,3 +9,8 @@ export interface ServiceAuth {
 }
 
 export type GhostfolioAuth = UserAuth | ServiceAuth;
+
+export interface AuthUser {
+  userId: string;
+  rawJwt: string;
+}

@@ -1,8 +1,9 @@
-import { Body, Controller, Headers, Param, Post } from '@nestjs/common';
+import { Body, Controller, Param, Post } from '@nestjs/common';
 import { IsIn, IsOptional, IsString } from 'class-validator';
 import { randomUUID } from 'crypto';
 
-import { extractUserId } from '../common/jwt.util';
+import { AuthUser } from '../common/auth.types';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { FeedbackRepository } from '../database/feedback.repository';
 
 export class FeedbackDto {
@@ -22,12 +23,11 @@ export class FeedbackController {
   public submitFeedback(
     @Param('conversationId') conversationId: string,
     @Body() body: FeedbackDto,
-    @Headers('authorization') authHeader: string
+    @CurrentUser() user: AuthUser
   ): { ok: true } {
-    const { userId } = extractUserId(authHeader);
     this.feedbackRepository.log({
       id: randomUUID(),
-      userId,
+      userId: user.userId,
       conversationId,
       rating: body.rating,
       correction: body.correction,

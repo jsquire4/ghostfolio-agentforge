@@ -9,6 +9,7 @@ interface BaseToolContext {
   userId: string;
   abortSignal: AbortSignal;
   auth: GhostfolioAuth;
+  client: IGhostfolioClient;
 }
 
 export interface UserToolContext extends BaseToolContext {
@@ -21,6 +22,13 @@ export interface ServiceToolContext extends BaseToolContext {
 
 export type ToolContext = UserToolContext | ServiceToolContext;
 
+export interface ToolResult {
+  tool: string;
+  fetchedAt: string;
+  data?: unknown;
+  error?: string;
+}
+
 export interface ToolDefinition {
   name: string;
   description: string;
@@ -31,11 +39,7 @@ export interface ToolDefinition {
   tags?: string[];
   version?: string;
   dependsOn?: string[];
-  execute: (params: unknown, context: ToolContext) => Promise<string>;
-}
-
-export interface ToolDeps {
-  client: IGhostfolioClient;
+  execute: (params: unknown, context: ToolContext) => Promise<ToolResult>;
 }
 
 export interface ToolCallRecord {

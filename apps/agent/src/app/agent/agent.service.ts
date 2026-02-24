@@ -11,6 +11,7 @@ import {
   NotFoundException,
   OnModuleInit
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 
@@ -20,12 +21,12 @@ import {
   ChatResponse,
   PendingAction,
   ToolCallRecord,
-  ToolDeps,
+  ToolResult,
   UserToolContext
 } from '../common/interfaces';
-import { extractUserId } from '../common/jwt.util';
 import { GhostfolioClientService } from '../ghostfolio/ghostfolio-client.service';
-import { getToolManifest } from '../tools/tool-manifest';
+import { REDIS_CLIENT } from '../redis/redis.constants';
+import { ALL_TOOLS } from '../tools/index';
 import { ToolRegistryService } from '../tools/tool-registry.service';
 import { VerificationService } from '../verification/verification.service';
 import { PendingActionsService } from './pending-actions.service';
@@ -44,10 +45,18 @@ export class AgentService implements OnModuleInit {
     private readonly verificationService: VerificationService,
     private readonly pendingActionsService: PendingActionsService,
     private readonly auditService: AuditService,
-    @Inject('REDIS_CLIENT') private readonly redisClient: Redis
+    private readonly configService: ConfigService,
+    @Inject(REDIS_CLIENT) private readonly redisClient: Redis
   ) {}
 
   onModuleInit(): void {
+    const apiKey = this.configService.get<string>('OPENAI_API_KEY');
+    if (!apiKey) {
+      throw new Error(
+        'OPENAI_API_KEY is not configured — agent cannot start without an LLM provider'
+      );
+    }
+
     this.checkpointSaver = new RedisCheckpointSaver(this.redisClient);
     this.llm = new ChatOpenAI({
       model: 'gpt-4o-mini',
@@ -56,9 +65,8 @@ export class AgentService implements OnModuleInit {
       timeout: 30000
     });
 
-    // Register all tools from the manifest
-    const deps: ToolDeps = { client: this.ghostfolioClient };
-    getToolManifest(deps).forEach((t) => this.toolRegistry.register(t));
+    // Register all tools from the barrel — no manual manifest editing required
+    ALL_TOOLS.forEach((t) => this.toolRegistry.register(t));
 
     this.logger.log(
       'AgentService initialized — tools registered, LLM configured'
@@ -116,22 +124,17 @@ export class AgentService implements OnModuleInit {
       tool(
         async (params: unknown) => {
           const start = Date.now();
-          const result = await def.execute(params, toolContext);
-          let success = true;
-          try {
-            success = !(JSON.parse(result) as { error?: string }).error;
-          } catch {
-            // non-JSON result is still success
-          }
+          const result: ToolResult = await def.execute(params, toolContext);
+          const success = !result.error;
           records.push({
             toolName: def.name,
             params,
-            result,
+            result: JSON.stringify(result),
             calledAt: new Date().toISOString(),
             durationMs: Date.now() - start,
             success
           });
-          return result;
+          return JSON.stringify(result);
         },
         {
           name: def.name,
@@ -195,8 +198,11 @@ export class AgentService implements OnModuleInit {
   // Public API
   // ---------------------------------------------------------------------------
 
-  async chat(request: ChatRequest, authHeader: string): Promise<ChatResponse> {
-    const { userId, rawJwt } = extractUserId(authHeader);
+  async chat(
+    request: ChatRequest,
+    userId: string,
+    rawJwt: string
+  ): Promise<ChatResponse> {
     const conversationId = request.conversationId ?? randomUUID();
     const threadId = `${userId}:${conversationId}`;
 
@@ -218,7 +224,8 @@ export class AgentService implements OnModuleInit {
       const toolContext: UserToolContext = {
         userId,
         abortSignal,
-        auth: { mode: 'user', jwt: rawJwt }
+        auth: { mode: 'user', jwt: rawJwt },
+        client: this.ghostfolioClient
       };
 
       const langchainTools = this._buildLangChainTools(toolContext, records);
@@ -292,10 +299,9 @@ export class AgentService implements OnModuleInit {
   async resume(
     actionId: string,
     approved: boolean,
-    authHeader: string
+    userId: string,
+    rawJwt: string
   ): Promise<ChatResponse> {
-    const { userId, rawJwt } = extractUserId(authHeader);
-
     const stored = await this.pendingActionsService.get(actionId);
     if (!stored) {
       throw new NotFoundException('Action not found or expired');
@@ -349,7 +355,8 @@ export class AgentService implements OnModuleInit {
     const toolContext: UserToolContext = {
       userId,
       abortSignal,
-      auth: { mode: 'user', jwt: rawJwt }
+      auth: { mode: 'user', jwt: rawJwt },
+      client: this.ghostfolioClient
     };
 
     try {

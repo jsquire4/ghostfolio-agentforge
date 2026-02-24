@@ -1,12 +1,15 @@
 import { createKeyv } from '@keyv/redis';
 import { CacheModule } from '@nestjs/cache-manager';
-import { Module } from '@nestjs/common';
+import { Global, Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import Redis from 'ioredis';
 
+import { REDIS_CLIENT } from './redis.constants';
 import { RedisService } from './redis.service';
 
+@Global()
 @Module({
-  exports: [RedisService],
+  exports: [RedisService, REDIS_CLIENT],
   imports: [
     CacheModule.registerAsync({
       imports: [ConfigModule],
@@ -31,6 +34,18 @@ import { RedisService } from './redis.service';
       }
     })
   ],
-  providers: [RedisService]
+  providers: [
+    RedisService,
+    {
+      provide: REDIS_CLIENT,
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) =>
+        new Redis({
+          host: config.get('REDIS_HOST', 'localhost'),
+          port: config.get<number>('REDIS_PORT', 6379),
+          password: config.get('REDIS_PASSWORD')
+        })
+    }
+  ]
 })
 export class RedisModule {}

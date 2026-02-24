@@ -14,5 +14,13 @@ export default {
   moduleFileExtensions: ['ts', 'js', 'html'],
   coverageDirectory: '../../coverage/apps/agent',
   testEnvironment: 'node',
-  preset: '../../jest.preset.js'
+  preset: '../../jest.preset.js',
+  coverageThreshold: {
+    global: {
+      lines: 70,
+      branches: 50,
+      functions: 59,
+      statements: 71
+    }
+  }
 };

@@ -4,7 +4,7 @@ import { randomUUID } from 'crypto';
 import { ToolCallRecord } from '../common/interfaces';
 import type { Verifier } from '../common/interfaces';
 import { InsightRepository } from '../database/insight.repository';
-import { getVerifierManifest } from './verifier-manifest';
+import { ALL_VERIFIERS } from './index';
 
 @Injectable()
 export class VerificationService {
@@ -12,7 +12,17 @@ export class VerificationService {
   private readonly verifiers: Verifier[];
 
   constructor(private readonly insightRepository: InsightRepository) {
-    this.verifiers = getVerifierManifest().sort((a, b) => a.order - b.order);
+    const sorted = [...ALL_VERIFIERS].sort((a, b) => a.order - b.order);
+    const names = new Set<string>();
+    for (const v of sorted) {
+      if (names.has(v.name)) {
+        throw new Error(
+          `Duplicate verifier name: "${v.name}" — each verifier must have a unique name`
+        );
+      }
+      names.add(v.name);
+    }
+    this.verifiers = sorted;
   }
 
   async runAll(

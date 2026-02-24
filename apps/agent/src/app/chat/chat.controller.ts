@@ -1,4 +1,4 @@
-import { Body, Controller, Headers, Post } from '@nestjs/common';
+import { Body, Controller, Post } from '@nestjs/common';
 import {
   IsNotEmpty,
   IsOptional,
@@ -8,6 +8,8 @@ import {
 } from 'class-validator';
 
 import { AgentService } from '../agent/agent.service';
+import { AuthUser } from '../common/auth.types';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChatResponse } from '../common/interfaces';
 
 export class ChatRequestDto {
@@ -28,8 +30,8 @@ export class ChatController {
   @Post()
   public async chat(
     @Body() body: ChatRequestDto,
-    @Headers('authorization') authHeader: string
+    @CurrentUser() user: AuthUser
   ): Promise<ChatResponse> {
-    return this.agentService.chat(body, authHeader);
+    return this.agentService.chat(body, user.userId, user.rawJwt);
   }
 }

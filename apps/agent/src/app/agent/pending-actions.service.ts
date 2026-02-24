@@ -2,13 +2,14 @@ import { Inject, Injectable } from '@nestjs/common';
 import Redis from 'ioredis';
 
 import { PendingAction } from '../common/interfaces';
+import { REDIS_CLIENT } from '../redis/redis.constants';
 
 @Injectable()
 export class PendingActionsService {
   private readonly KEY_PREFIX = 'hitl:pending:';
   private readonly DEFAULT_TTL_SECONDS = 15 * 60; // 15 minutes
 
-  constructor(@Inject('REDIS_CLIENT') private readonly redis: Redis) {}
+  constructor(@Inject(REDIS_CLIENT) private readonly redis: Redis) {}
 
   async store(action: PendingAction, threadId: string): Promise<void> {
     const key = `${this.KEY_PREFIX}${action.id}`;

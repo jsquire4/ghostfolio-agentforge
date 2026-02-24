@@ -1,5 +1,8 @@
 import { Controller, Get, Post } from '@nestjs/common';
 
+import { AuthUser } from '../common/auth.types';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+
 export interface EvalResult {
   passRate: number;
   runId: string;
@@ -11,7 +14,11 @@ export interface EvalResult {
 @Controller('v1/evals')
 export class EvalsController {
   @Post('run')
-  public runEvals(): { runId: string; status: string } {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  public runEvals(@CurrentUser() user: AuthUser): {
+    runId: string;
+    status: string;
+  } {
     // TODO: Trigger eval suite against LangSmith
     return {
       runId: 'stub',
@@ -20,7 +27,8 @@ export class EvalsController {
   }
 
   @Get('results')
-  public getResults(): EvalResult[] {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  public getResults(@CurrentUser() user: AuthUser): EvalResult[] {
     // TODO: Return historical eval results
     return [];
   }

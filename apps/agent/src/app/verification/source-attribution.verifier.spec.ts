@@ -1,3 +1,4 @@
+import { makeToolCallRecord } from '../../test-fixtures';
 import { ToolCallRecord } from '../common/interfaces';
 import { SourceAttributionVerifier } from './source-attribution.verifier';
 
@@ -12,14 +13,10 @@ describe('SourceAttributionVerifier', () => {
     const response =
       'Your portfolio is worth $10,000 with a 40% allocation in stocks.';
     const toolCalls: ToolCallRecord[] = [
-      {
+      makeToolCallRecord({
         toolName: 'get-portfolio',
-        params: {},
-        result: 'Total value: $10,000. Stock allocation: 40%.',
-        calledAt: new Date().toISOString(),
-        durationMs: 120,
-        success: true
-      }
+        result: 'Total value: $10,000. Stock allocation: 40%.'
+      })
     ];
 
     const result = await verifier.verify(response, toolCalls);
@@ -54,14 +51,10 @@ describe('SourceAttributionVerifier', () => {
   it('warns when dollar amount not found in any tool result', async () => {
     const response = 'Your balance is $99,999.';
     const toolCalls: ToolCallRecord[] = [
-      {
+      makeToolCallRecord({
         toolName: 'get-portfolio',
-        params: {},
-        result: 'Total value: $10,000.',
-        calledAt: new Date().toISOString(),
-        durationMs: 80,
-        success: true
-      }
+        result: 'Total value: $10,000.'
+      })
     ];
 
     const result = await verifier.verify(response, toolCalls);
@@ -75,14 +68,10 @@ describe('SourceAttributionVerifier', () => {
   it('warns when percentage not found in any tool result', async () => {
     const response = 'Your return rate is 45.5% this year.';
     const toolCalls: ToolCallRecord[] = [
-      {
+      makeToolCallRecord({
         toolName: 'get-performance',
-        params: {},
-        result: 'Annual return: 12.3%.',
-        calledAt: new Date().toISOString(),
-        durationMs: 95,
-        success: true
-      }
+        result: 'Annual return: 12.3%.'
+      })
     ];
 
     const result = await verifier.verify(response, toolCalls);
@@ -94,22 +83,14 @@ describe('SourceAttributionVerifier', () => {
     const response =
       'Your portfolio is worth $25,000 with a 60% equity allocation.';
     const toolCalls: ToolCallRecord[] = [
-      {
+      makeToolCallRecord({
         toolName: 'get-portfolio',
-        params: {},
-        result: 'Total value: $25,000.',
-        calledAt: new Date().toISOString(),
-        durationMs: 110,
-        success: true
-      },
-      {
+        result: 'Total value: $25,000.'
+      }),
+      makeToolCallRecord({
         toolName: 'get-allocation',
-        params: {},
-        result: 'Equity: 60%.',
-        calledAt: new Date().toISOString(),
-        durationMs: 90,
-        success: true
-      }
+        result: 'Equity: 60%.'
+      })
     ];
 
     const result = await verifier.verify(response, toolCalls);

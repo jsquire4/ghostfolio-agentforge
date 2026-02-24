@@ -1,4 +1,4 @@
-import { ToolCallRecord } from '../common/interfaces';
+import { makeToolCallRecord } from '../../test-fixtures';
 import { ConfidenceVerifier } from './confidence.verifier';
 
 describe('ConfidenceVerifier', () => {
@@ -8,22 +8,13 @@ describe('ConfidenceVerifier', () => {
     verifier = new ConfidenceVerifier();
   });
 
-  const makeToolCall = (name = 'get_portfolio'): ToolCallRecord => ({
-    toolName: name,
-    params: {},
-    result: 'ok',
-    calledAt: new Date().toISOString(),
-    durationMs: 100,
-    success: true
-  });
-
   it('returns high confidence with 3+ tool calls and no hedging', async () => {
     const result = await verifier.verify(
       'Your portfolio returned 12% this year.',
       [
-        makeToolCall(),
-        makeToolCall('get_holdings'),
-        makeToolCall('get_performance')
+        makeToolCallRecord({ toolName: 'get_portfolio' }),
+        makeToolCallRecord({ toolName: 'get_holdings' }),
+        makeToolCallRecord({ toolName: 'get_performance' })
       ]
     );
 
@@ -35,7 +26,7 @@ describe('ConfidenceVerifier', () => {
   it('returns medium confidence with 1-2 tool calls and no hedging', async () => {
     const result = await verifier.verify(
       'Your portfolio returned 12% this year.',
-      [makeToolCall()]
+      [makeToolCallRecord()]
     );
 
     expect(result.pass).toBe(true);
@@ -59,9 +50,9 @@ describe('ConfidenceVerifier', () => {
     const result = await verifier.verify(
       'Your portfolio returned approximately 12% this year.',
       [
-        makeToolCall(),
-        makeToolCall('get_holdings'),
-        makeToolCall('get_performance')
+        makeToolCallRecord({ toolName: 'get_portfolio' }),
+        makeToolCallRecord({ toolName: 'get_holdings' }),
+        makeToolCallRecord({ toolName: 'get_performance' })
       ]
     );
 
@@ -74,7 +65,7 @@ describe('ConfidenceVerifier', () => {
   it('downgrades from medium to low with hedging', async () => {
     const result = await verifier.verify(
       'I think your portfolio did well this year.',
-      [makeToolCall()]
+      [makeToolCallRecord()]
     );
 
     // 1 tool call = medium, 1 hedging term = downgrade to low
@@ -87,9 +78,9 @@ describe('ConfidenceVerifier', () => {
 
   it('always passes — never flags', async () => {
     const highResult = await verifier.verify('Solid data.', [
-      makeToolCall(),
-      makeToolCall(),
-      makeToolCall()
+      makeToolCallRecord(),
+      makeToolCallRecord(),
+      makeToolCallRecord()
     ]);
     const lowResult = await verifier.verify(
       'I think maybe approximately around something.',
@@ -105,7 +96,11 @@ describe('ConfidenceVerifier', () => {
   it('detects multiple hedging terms', async () => {
     const result = await verifier.verify(
       'The value is approximately $1000 and it might be higher. I believe it could grow.',
-      [makeToolCall(), makeToolCall(), makeToolCall()]
+      [
+        makeToolCallRecord({ toolName: 'get_portfolio' }),
+        makeToolCallRecord({ toolName: 'get_holdings' }),
+        makeToolCallRecord({ toolName: 'get_performance' })
+      ]
     );
 
     // 3 tool calls = high, 3 hedging terms (approximately, might be, I believe) = downgrade 3 levels → low
