@@ -1,5 +1,5 @@
 import { HumanMessage } from '@langchain/core/messages';
-import { tool } from '@langchain/core/tools';
+import { StructuredTool, tool } from '@langchain/core/tools';
 import { isInterrupted, INTERRUPT, Command } from '@langchain/langgraph';
 import { createReactAgent } from '@langchain/langgraph/prebuilt';
 import { ChatOpenAI } from '@langchain/openai';
@@ -65,6 +65,136 @@ export class AgentService implements OnModuleInit {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /** Load user settings and AI prompt context from Ghostfolio. Failures are
+   *  swallowed so the agent always has a usable (possibly empty) context. */
+  private async _loadUserContext(rawJwt: string): Promise<{
+    currency?: string;
+    language?: string;
+    aiPromptContext?: string;
+  }> {
+    let currency: string | undefined;
+    let language: string | undefined;
+    let aiPromptContext: string | undefined;
+
+    try {
+      const user = await this.ghostfolioClient.get<{
+        settings: { baseCurrency?: string; language?: string };
+      }>('/api/v1/user', { mode: 'user', jwt: rawJwt });
+      currency = user.settings?.baseCurrency;
+      language = user.settings?.language;
+    } catch {
+      // User context load failed — proceed with defaults
+    }
+
+    try {
+      const prompt = await this.ghostfolioClient.get<{ prompt: string }>(
+        '/api/v1/ai/prompt/analysis',
+        { mode: 'user', jwt: rawJwt }
+      );
+      aiPromptContext = prompt.prompt;
+    } catch {
+      // AI prompt context load failed — proceed without it
+    }
+
+    return { currency, language, aiPromptContext };
+  }
+
+  /** Wrap every registered tool definition in a LangChain StructuredTool that
+   *  records call metadata into the caller-owned `records` array.
+   *
+   *  `records` MUST be a local variable in the caller — never a class property
+   *  (class property would cause cross-user data leaks under concurrent requests). */
+  private _buildLangChainTools(
+    toolContext: UserToolContext,
+    records: ToolCallRecord[]
+  ): StructuredTool[] {
+    return this.toolRegistry.getAll().map((def) =>
+      tool(
+        async (params: unknown) => {
+          const start = Date.now();
+          const result = await def.execute(params, toolContext);
+          let success = true;
+          try {
+            success = !(JSON.parse(result) as { error?: string }).error;
+          } catch {
+            // non-JSON result is still success
+          }
+          records.push({
+            toolName: def.name,
+            params,
+            result,
+            calledAt: new Date().toISOString(),
+            durationMs: Date.now() - start,
+            success
+          });
+          return result;
+        },
+        {
+          name: def.name,
+          description: def.description,
+          schema: def.schema
+        }
+      )
+    );
+  }
+
+  /** Compile a fresh ReAct agent for a single request.
+   *  Tools close over the per-request JWT so the agent must never be reused
+   *  across calls. */
+  private _buildAgent(
+    systemPrompt: string,
+    langchainTools: StructuredTool[]
+  ): ReturnType<typeof createReactAgent> {
+    return createReactAgent({
+      llm: this.llm,
+      tools: langchainTools,
+      prompt: systemPrompt,
+      checkpointSaver: this.checkpointSaver
+    });
+  }
+
+  /** Extract the final text response from the agent invoke result. */
+  private _extractLastMessage(result: unknown): string {
+    const messages = (result as { messages?: unknown[] }).messages ?? [];
+    const lastMessage = messages[messages.length - 1] as
+      | { content?: unknown }
+      | undefined;
+    return typeof lastMessage?.content === 'string'
+      ? lastMessage.content
+      : JSON.stringify(lastMessage?.content ?? '');
+  }
+
+  /** Run verification and assemble the final ChatResponse. */
+  private async _buildVerifiedResponse(
+    agentResponse: string,
+    records: ToolCallRecord[],
+    conversationId: string,
+    userId: string,
+    pendingConfirmations?: PendingAction[]
+  ): Promise<ChatResponse> {
+    const { warnings, flags } = await this.verificationService.runAll(
+      agentResponse,
+      records,
+      userId
+    );
+    return {
+      message: agentResponse,
+      conversationId,
+      toolCalls: records,
+      pendingConfirmations: pendingConfirmations ?? [],
+      warnings,
+      flags
+    };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Public API
+  // ---------------------------------------------------------------------------
+
   async chat(request: ChatRequest, authHeader: string): Promise<ChatResponse> {
     const { userId, rawJwt } = extractUserId(authHeader);
     const conversationId = request.conversationId ?? randomUUID();
@@ -74,30 +204,8 @@ export class AgentService implements OnModuleInit {
     const records: ToolCallRecord[] = [];
 
     try {
-      // Load user context (failures produce empty context)
-      let currency: string | undefined;
-      let language: string | undefined;
-      let aiPromptContext: string | undefined;
-
-      try {
-        const user = await this.ghostfolioClient.get<{
-          settings: { baseCurrency?: string; language?: string };
-        }>('/api/v1/user', { mode: 'user', jwt: rawJwt });
-        currency = user.settings?.baseCurrency;
-        language = user.settings?.language;
-      } catch {
-        // User context load failed — proceed with defaults
-      }
-
-      try {
-        const prompt = await this.ghostfolioClient.get<{ prompt: string }>(
-          '/api/v1/ai/prompt/analysis',
-          { mode: 'user', jwt: rawJwt }
-        );
-        aiPromptContext = prompt.prompt;
-      } catch {
-        // AI prompt context load failed — proceed without it
-      }
+      const { currency, language, aiPromptContext } =
+        await this._loadUserContext(rawJwt);
 
       const systemPrompt = buildSystemPrompt({
         userId,
@@ -113,66 +221,36 @@ export class AgentService implements OnModuleInit {
         auth: { mode: 'user', jwt: rawJwt }
       };
 
-      // Wrap tools to record calls
-      const langchainTools = this.toolRegistry.getAll().map((def) => {
-        return tool(
-          async (params: unknown) => {
-            const start = Date.now();
-            const result = await def.execute(params, toolContext);
-            let success = true;
-            try {
-              success = !(JSON.parse(result) as { error?: string }).error;
-            } catch {
-              // non-JSON result is still success
-            }
-            records.push({
-              toolName: def.name,
-              params,
-              result,
-              calledAt: new Date().toISOString(),
-              durationMs: Date.now() - start,
-              success
-            });
-            return result;
-          },
-          {
-            name: def.name,
-            description: def.description,
-            schema: def.schema
-          }
-        );
-      });
-
-      // Build agent fresh each call — tools close over per-request JWT
-      const agent = createReactAgent({
-        llm: this.llm,
-        tools: langchainTools,
-        prompt: systemPrompt,
-        checkpointSaver: this.checkpointSaver
-      });
+      const langchainTools = this._buildLangChainTools(toolContext, records);
+      const agent = this._buildAgent(systemPrompt, langchainTools);
 
       const result = await agent.invoke(
         { messages: [new HumanMessage(request.message)] },
         { configurable: { thread_id: threadId } }
       );
 
-      // Detect interrupt (HITL)
+      // Detect interrupt (HITL) — unique to chat()
       if (isInterrupted(result)) {
-        const interruptPayload = (result as any)[INTERRUPT]?.[0]?.value as
+        const interruptPayload = (result as Record<string | symbol, unknown>)[
+          INTERRUPT
+        ] as
           | {
-              toolName: string;
-              proposedParams: unknown;
-              description: string;
-            }
+              value: {
+                toolName: string;
+                proposedParams: unknown;
+                description: string;
+              };
+            }[]
           | undefined;
+        const payload = interruptPayload?.[0]?.value;
 
-        if (interruptPayload) {
+        if (payload) {
           const pendingAction: PendingAction = {
             id: randomUUID(),
-            toolName: interruptPayload.toolName,
+            toolName: payload.toolName,
             category: 'write',
-            proposedParams: interruptPayload.proposedParams,
-            description: interruptPayload.description,
+            proposedParams: payload.proposedParams,
+            description: payload.description,
             status: 'pending',
             createdAt: new Date().toISOString(),
             expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
@@ -190,29 +268,13 @@ export class AgentService implements OnModuleInit {
         }
       }
 
-      // Extract last AI message
-      const messages = result.messages ?? [];
-      const lastMessage = messages[messages.length - 1];
-      const agentResponse =
-        typeof lastMessage?.content === 'string'
-          ? lastMessage.content
-          : JSON.stringify(lastMessage?.content ?? '');
-
-      // Run verification
-      const { warnings, flags } = await this.verificationService.runAll(
+      const agentResponse = this._extractLastMessage(result);
+      return await this._buildVerifiedResponse(
         agentResponse,
         records,
+        conversationId,
         userId
       );
-
-      return {
-        message: agentResponse,
-        conversationId,
-        toolCalls: records,
-        pendingConfirmations: [],
-        warnings,
-        flags
-      };
     } catch (err) {
       this.logger.error(`chat() error for user ${userId}: ${err}`);
       return {
@@ -249,6 +311,7 @@ export class AgentService implements OnModuleInit {
     const conversationId = threadId.split(':').slice(1).join(':');
     const timestamp = new Date().toISOString();
 
+    // Rejected branch — unique to resume()
     if (!approved) {
       await this.pendingActionsService.updateStatus(actionId, 'rejected');
       await this.auditService.log({
@@ -290,99 +353,29 @@ export class AgentService implements OnModuleInit {
     };
 
     try {
-      const langchainTools = this.toolRegistry.getAll().map((def) => {
-        return tool(
-          async (params: unknown) => {
-            const start = Date.now();
-            const result = await def.execute(params, toolContext);
-            let success = true;
-            try {
-              success = !(JSON.parse(result) as { error?: string }).error;
-            } catch {
-              // non-JSON result is still success
-            }
-            records.push({
-              toolName: def.name,
-              params,
-              result,
-              calledAt: new Date().toISOString(),
-              durationMs: Date.now() - start,
-              success
-            });
-            return result;
-          },
-          {
-            name: def.name,
-            description: def.description,
-            schema: def.schema
-          }
-        );
-      });
-
-      let currency: string | undefined;
-      let language: string | undefined;
-      let aiPromptContext: string | undefined;
-
-      try {
-        const user = await this.ghostfolioClient.get<{
-          settings: { baseCurrency?: string; language?: string };
-        }>('/api/v1/user', { mode: 'user', jwt: rawJwt });
-        currency = user.settings?.baseCurrency;
-        language = user.settings?.language;
-      } catch {
-        // User context load failed — proceed with defaults
-      }
-
-      try {
-        const prompt = await this.ghostfolioClient.get<{ prompt: string }>(
-          '/api/v1/ai/prompt/analysis',
-          { mode: 'user', jwt: rawJwt }
-        );
-        aiPromptContext = prompt.prompt;
-      } catch {
-        // AI prompt context load failed — proceed without it
-      }
-
+      const langchainTools = this._buildLangChainTools(toolContext, records);
+      const { currency, language, aiPromptContext } =
+        await this._loadUserContext(rawJwt);
       const systemPrompt = buildSystemPrompt({
         userId,
         currency,
         language,
         aiPromptContext
       });
-
-      const agent = createReactAgent({
-        llm: this.llm,
-        tools: langchainTools,
-        prompt: systemPrompt,
-        checkpointSaver: this.checkpointSaver
-      });
+      const agent = this._buildAgent(systemPrompt, langchainTools);
 
       const result = await agent.invoke(
         new Command({ resume: action.proposedParams }),
         { configurable: { thread_id: threadId } }
       );
 
-      const messages = result.messages ?? [];
-      const lastMessage = messages[messages.length - 1];
-      const agentResponse =
-        typeof lastMessage?.content === 'string'
-          ? lastMessage.content
-          : JSON.stringify(lastMessage?.content ?? '');
-
-      const { warnings, flags } = await this.verificationService.runAll(
+      const agentResponse = this._extractLastMessage(result);
+      return await this._buildVerifiedResponse(
         agentResponse,
         records,
+        conversationId,
         userId
       );
-
-      return {
-        message: agentResponse,
-        conversationId,
-        toolCalls: records,
-        pendingConfirmations: [],
-        warnings,
-        flags
-      };
     } catch (err) {
       this.logger.error(`resume() error for user ${userId}: ${err}`);
       return {

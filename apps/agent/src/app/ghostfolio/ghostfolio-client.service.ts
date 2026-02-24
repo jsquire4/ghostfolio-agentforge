@@ -106,7 +106,7 @@ export class GhostfolioClientService implements IGhostfolioClient {
     }
 
     // Guard: if a refresh is already in-flight, return the same promise
-    if (this.refreshPromise) {
+    if (this.refreshPromise !== null) {
       return this.refreshPromise;
     }
 
