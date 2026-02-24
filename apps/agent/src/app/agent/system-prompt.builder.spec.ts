@@ -2,6 +2,15 @@ import { UserContext } from '../common/interfaces';
 import { buildSystemPrompt } from './system-prompt.builder';
 
 describe('buildSystemPrompt', () => {
+  beforeEach(() => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2025-06-15T12:00:00Z'));
+  });
+
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
   it('includes the role section', () => {
     const ctx: UserContext = { userId: 'u1' };
     const result = buildSystemPrompt(ctx);
@@ -12,8 +21,7 @@ describe('buildSystemPrompt', () => {
   it("includes today's date", () => {
     const ctx: UserContext = { userId: 'u1' };
     const result = buildSystemPrompt(ctx);
-    const today = new Date().toISOString().split('T')[0];
-    expect(result).toContain(today);
+    expect(result).toContain('2025-06-15');
   });
 
   it('includes currency when provided', () => {

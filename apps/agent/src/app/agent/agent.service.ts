@@ -11,7 +11,6 @@ import {
   NotFoundException,
   OnModuleInit
 } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { randomUUID } from 'crypto';
 import Redis from 'ioredis';
 
@@ -38,10 +37,8 @@ export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
   private checkpointSaver!: RedisCheckpointSaver;
   private llm!: ChatOpenAI;
-  private readonly ghostfolioBaseUrl: string;
 
   constructor(
-    configService: ConfigService,
     private readonly ghostfolioClient: GhostfolioClientService,
     private readonly toolRegistry: ToolRegistryService,
     private readonly verificationService: VerificationService,
@@ -49,10 +46,6 @@ export class AgentService implements OnModuleInit {
     private readonly auditService: AuditService,
     @Inject('REDIS_CLIENT') private readonly redisClient: Redis
   ) {
-    this.ghostfolioBaseUrl = configService.get<string>(
-      'GHOSTFOLIO_BASE_URL',
-      'http://localhost:3333'
-    );
   }
 
   onModuleInit(): void {
@@ -117,7 +110,6 @@ export class AgentService implements OnModuleInit {
       const abortSignal = AbortSignal.timeout(30000);
       const toolContext: UserToolContext = {
         userId,
-        ghostfolioBaseUrl: this.ghostfolioBaseUrl,
         abortSignal,
         auth: { mode: 'user', jwt: rawJwt }
       };
@@ -294,7 +286,6 @@ export class AgentService implements OnModuleInit {
     const abortSignal = AbortSignal.timeout(30000);
     const toolContext: UserToolContext = {
       userId,
-      ghostfolioBaseUrl: this.ghostfolioBaseUrl,
       abortSignal,
       auth: { mode: 'user', jwt: rawJwt }
     };

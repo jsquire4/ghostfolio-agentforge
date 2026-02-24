@@ -37,11 +37,11 @@ export class AuditRepository {
       userId: row.userId,
       action: row.action,
       toolName: row.toolName ?? undefined,
-      params: row.params ? JSON.parse(row.params) : undefined,
+      params: row.params ? (() => { try { return JSON.parse(row.params); } catch { return {}; } })() : undefined,
       result: row.result ?? undefined,
       timestamp: row.timestamp,
       durationMs: row.durationMs ?? undefined,
-      metadata: row.metadata ? JSON.parse(row.metadata) : undefined
+      metadata: row.metadata ? (() => { try { return JSON.parse(row.metadata); } catch { return {}; } })() : undefined
     }));
   }
 }

@@ -77,6 +77,11 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_log_userId ON audit_log(userId)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_feedback_userId ON feedback(userId)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_insights_userId ON insights(userId)`);
+    this.db.exec(`CREATE INDEX IF NOT EXISTS idx_insights_generated_at ON insights(generated_at)`);
+
     this.logger.log(`SQLite connected: ${dbPath}`);
   }
 

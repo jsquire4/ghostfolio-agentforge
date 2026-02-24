@@ -26,11 +26,7 @@ export function portfolioSummaryTool(deps: ToolDeps): ToolDefinition {
       context: UserToolContext
     ): Promise<string> => {
       try {
-        const parsed = z
-          .object({
-            mode: z.enum(['analysis', 'portfolio']).default('analysis')
-          })
-          .parse(params);
+        const { mode = 'analysis' } = params as { mode?: 'analysis' | 'portfolio' };
 
         if (context.abortSignal?.aborted) {
           return JSON.stringify({
@@ -41,12 +37,12 @@ export function portfolioSummaryTool(deps: ToolDeps): ToolDefinition {
         }
 
         const data = await deps.client.get<{ prompt: string }>(
-          `/api/v1/ai/prompt/${parsed.mode}`,
+          `/api/v1/ai/prompt/${mode}`,
           context.auth
         );
 
         return JSON.stringify({
-          data: { prompt: data.prompt, mode: parsed.mode },
+          data: { prompt: data.prompt, mode: mode },
           fetchedAt: new Date().toISOString()
         });
       } catch (err) {

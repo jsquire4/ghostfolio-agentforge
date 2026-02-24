@@ -23,19 +23,19 @@ export class InsightRepository {
     );
   }
 
-  getByUser(userId: string): InsightRecord[] {
+  getByUser(userId: string, limit = 50, offset = 0): InsightRecord[] {
     const rows = this.db
       .getDb()
       .prepare(
-        `SELECT * FROM insights WHERE userId = ? ORDER BY generated_at DESC`
+        `SELECT * FROM insights WHERE userId = ? ORDER BY generated_at DESC LIMIT ? OFFSET ?`
       )
-      .all(userId) as any[];
+      .all(userId, limit, offset) as any[];
     return rows.map((row) => ({
       id: row.id,
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data ? JSON.parse(row.data) : undefined,
+      data: row.data ? (() => { try { return JSON.parse(row.data); } catch { return {}; } })() : undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     }));
@@ -52,7 +52,7 @@ export class InsightRepository {
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data ? JSON.parse(row.data) : undefined,
+      data: row.data ? (() => { try { return JSON.parse(row.data); } catch { return {}; } })() : undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     };

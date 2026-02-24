@@ -22,7 +22,6 @@ export type GhostfolioAuth = UserAuth | ServiceAuth;
 
 interface BaseToolContext {
   userId: string;
-  ghostfolioBaseUrl: string;
   abortSignal: AbortSignal;
   auth: GhostfolioAuth;
 }

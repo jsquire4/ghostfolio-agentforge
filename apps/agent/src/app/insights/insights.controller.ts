@@ -1,4 +1,11 @@
-import { Controller, Get, Headers } from '@nestjs/common';
+import {
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Headers,
+  ParseIntPipe,
+  Query
+} from '@nestjs/common';
 
 import { InsightRecord } from '../common/interfaces';
 import { extractUserId } from '../common/jwt.util';
@@ -10,9 +17,11 @@ export class InsightsController {
 
   @Get()
   public getInsights(
-    @Headers('authorization') authHeader: string
+    @Headers('authorization') authHeader: string,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number
   ): InsightRecord[] {
     const { userId } = extractUserId(authHeader);
-    return this.insightRepository.getByUser(userId);
+    return this.insightRepository.getByUser(userId, limit, offset);
   }
 }
