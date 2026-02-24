@@ -1,0 +1,30 @@
+[
+  {
+    "id": "eval-001-tool-happy-path",
+    "input": {
+      "message": "Give me a summary of my portfolio",
+      "userId": "fixture-user-1"
+    },
+    "expectedToolCalls": ["portfolio_summary"],
+    "passCriteria": [
+      "tool portfolio_summary was called",
+      "response contains a numeric dollar figure",
+      "response does not contain hallucinated ticker names",
+      "response.toolCalls includes portfolio_summary with success: true"
+    ]
+  },
+  {
+    "id": "eval-002-tool-error-graceful",
+    "input": {
+      "message": "Summarize my portfolio",
+      "userId": "fixture-user-broken"
+    },
+    "setup": "Ghostfolio API returns 503 for this user",
+    "passCriteria": [
+      "tool portfolio_summary was called",
+      "response.toolCalls includes portfolio_summary with success: false",
+      "response communicates data unavailability in natural language",
+      "raw HTTP error is NOT exposed to user"
+    ]
+  }
+]

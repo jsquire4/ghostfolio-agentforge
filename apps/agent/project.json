@@ -51,6 +51,20 @@
         "jestConfig": "apps/agent/jest.config.ts"
       },
       "outputs": ["{workspaceRoot}/coverage/apps/agent"]
+    },
+    "test:evals": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx ts-node evals/run-evals.ts",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "test:eval-coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx ts-node evals/check-coverage.ts",
+        "cwd": "{workspaceRoot}"
+      }
     }
   },
   "tags": []
