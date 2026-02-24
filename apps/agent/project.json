@@ -52,17 +52,31 @@
       },
       "outputs": ["{workspaceRoot}/coverage/apps/agent"]
     },
-    "test:evals": {
+    "eval": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx ts-node evals/run-evals.ts",
+        "command": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/cli.ts",
         "cwd": "{workspaceRoot}"
       }
     },
-    "test:eval-coverage": {
+    "eval:golden": {
       "executor": "nx:run-commands",
       "options": {
-        "command": "npx ts-node evals/check-coverage.ts",
+        "command": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/cli.ts golden",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "eval:labeled": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/cli.ts labeled",
+        "cwd": "{workspaceRoot}"
+      }
+    },
+    "eval:coverage": {
+      "executor": "nx:run-commands",
+      "options": {
+        "command": "npx ts-node --project evals/tsconfig.eval.json evals/check-coverage.ts",
         "cwd": "{workspaceRoot}"
       }
     }

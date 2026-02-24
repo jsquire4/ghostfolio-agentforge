@@ -11,6 +11,7 @@ import { RedisService } from './redis.service';
 @Module({
   exports: [RedisService, REDIS_CLIENT],
   imports: [
+    ConfigModule,
     CacheModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

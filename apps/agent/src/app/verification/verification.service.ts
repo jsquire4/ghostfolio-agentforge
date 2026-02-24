@@ -1,10 +1,12 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 
 import { ToolCallRecord } from '../common/interfaces';
 import type { Verifier } from '../common/interfaces';
 import { InsightRepository } from '../database/insight.repository';
 import { ALL_VERIFIERS } from './index';
+
+export const VERIFIERS_OVERRIDE = 'VERIFIERS_OVERRIDE';
 
 @Injectable()
 export class VerificationService {
@@ -13,7 +15,7 @@ export class VerificationService {
 
   constructor(
     private readonly insightRepository: InsightRepository,
-    verifiersOverride?: Verifier[]
+    @Optional() @Inject(VERIFIERS_OVERRIDE) verifiersOverride?: Verifier[]
   ) {
     const source = verifiersOverride ?? ALL_VERIFIERS;
     const sorted = [...source].sort((a, b) => a.order - b.order);

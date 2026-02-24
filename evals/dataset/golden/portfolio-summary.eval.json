@@ -1,0 +1,67 @@
+[
+  {
+    "id": "gs-001",
+    "description": "portfolio summary — returns holdings and allocation",
+    "input": { "message": "Give me a summary of my portfolio" },
+    "expect": {
+      "toolsCalled": ["portfolio_summary"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["VTI", "AAPL", "MSFT"],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-002",
+    "description": "allocation breakdown — mentions top holdings by weight",
+    "input": { "message": "What are my largest holdings?" },
+    "expect": {
+      "toolsCalled": ["portfolio_summary"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["VTI", "USD"],
+      "responseNotContains": ["I don't know", "no data"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-003",
+    "description": "asset class mix — identifies equities and bonds",
+    "input": { "message": "What asset classes am I invested in?" },
+    "expect": {
+      "toolsCalled": ["portfolio_summary"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["equity", "bond"],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-004",
+    "description": "no raw JSON leak — response is natural language",
+    "input": { "message": "What does my portfolio look like?" },
+    "expect": {
+      "toolsCalled": ["portfolio_summary"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["portfolio"],
+      "responseNotContains": ["fetchedAt", "\"tool\":", "\"error\":", "undefined"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-005",
+    "description": "diversification check — mentions multiple sectors or regions",
+    "input": { "message": "How diversified is my portfolio?" },
+    "expect": {
+      "toolsCalled": ["portfolio_summary"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["diversi"],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  }
+]

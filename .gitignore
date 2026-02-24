@@ -4,6 +4,10 @@
 /out-tsc
 /tmp
 
+# eval reports (generated, not committed)
+/evals/reports/*.json
+/evals/reports/*.html
+
 # dependencies
 /node_modules
 npm-debug.log

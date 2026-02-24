@@ -34,16 +34,33 @@ Built for Gauntlet Week 2 · Forked from [Ghostfolio](https://ghostfol.io)
 ## Quick Start
 
 ```bash
-# Start dependencies
+# One-command setup: prompts for OpenAI key, starts Docker, seeds DB + eval user
+npm run setup
+
+# Start the agent
+npm run start:agent
+
+# Run evals
+npm run eval:golden
+```
+
+`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key, starts Docker (Postgres, Redis, Ghostfolio), runs database migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI), and builds the agent. If `.env` already exists, it skips what's already configured.
+
+<details>
+<summary>Manual setup (if you prefer step-by-step)</summary>
+
+```bash
+cp .env.example .env
+# Edit .env → set OPENAI_API_KEY + fill in passwords/salts
+
 docker compose -f docker/docker-compose.yml up -d
-
-# Start Ghostfolio API + client
-npm run start:api
-npm run start:client
-
-# Start AgentForge agent
+npm run database:setup
+npm run eval:seed        # creates eval user + writes GHOSTFOLIO_API_TOKEN to .env
+npm run build:agent
 npm run start:agent
 ```
+
+</details>
 
 ## Development
 
@@ -57,6 +74,71 @@ npm run test:agent
 # Smoke-test chat round-trip
 ./scripts/test-chat.sh "What is my portfolio performance?"
 ```
+
+## Evals
+
+Two-tier eval system for validating agent behavior. Both tiers send prompts through the full agent loop (LLM + real Ghostfolio API). See [`evals/dataset/`](evals/dataset/) for all eval cases.
+
+| Tier | What it tests | When to run |
+|------|--------------|-------------|
+| **Golden** | Known-answer prompts — correct tool called, tool succeeds, natural language response | Every commit |
+| **Labeled** | Routing under ambiguity, edge cases (prompt injection, off-topic), response quality | Branch merge |
+
+### Eval Setup (Instructors / New Contributors)
+
+Both eval tiers require the full stack running (Ghostfolio + Agent) and a seeded user with portfolio data:
+
+```bash
+# 1. Copy environment and add your OpenAI key
+cp .env.example .env
+# Edit .env → set OPENAI_API_KEY (required for agent LLM calls)
+
+# 2. Start infrastructure
+docker compose -f docker/docker-compose.yml up -d
+npm run database:setup    # creates tables + system tags
+
+# 3. Seed eval user + demo portfolio (auto-writes GHOSTFOLIO_API_TOKEN to .env)
+npm run eval:seed
+
+# 4. Start the agent
+npm run start:agent
+
+# 5. Run evals
+npm run eval:golden
+```
+
+`npm run eval:seed` creates a Ghostfolio user, imports demo holdings (AAPL, GOOGL, MSFT, AMZN, VTI), and writes the `GHOSTFOLIO_API_TOKEN` to `.env` automatically. The eval runner exchanges this token for a real JWT at runtime so tool calls authenticate as a real user. If the token is already valid, the seed is skipped.
+
+### Running Evals
+
+```bash
+# Run golden evals (known-answer, deterministic assertions)
+npm run eval:golden
+
+# Run labeled evals (routing + quality)
+npm run eval:labeled
+
+# Filter labeled evals by difficulty
+npm run eval:labeled -- --difficulty straightforward
+npm run eval:labeled -- --difficulty edge
+
+# Run all evals
+npm run eval
+
+# Check every tool has eval coverage
+npm run eval:coverage
+
+# Validate setup before running evals
+npm run eval:setup
+```
+
+### UI Users
+
+Regular users don't need any `.env` configuration. The Angular client handles authentication automatically — when you log into Ghostfolio, your JWT is stored in the browser and the `AuthInterceptor` attaches it to all requests, including those to the agent. The agent forwards the JWT to Ghostfolio's API for tool calls. No manual token management needed.
+
+**Eval dataset format:** Each tool gets two JSON files — one in `evals/dataset/golden/` (known-answer tool tests) and one in `evals/dataset/labeled/` (routing tests with straightforward/ambiguous/edge cases). See [`evals/types.ts`](evals/types.ts) for the full schema.
+
+**Adding evals for a new tool:** Drop two files (`<tool-name>.eval.json`) into `golden/` and `labeled/` — both runners auto-discover via glob.
 
 ---
 

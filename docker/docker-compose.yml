@@ -92,6 +92,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      ghostfolio:
+        condition: service_healthy
     volumes:
       - agent_data:/app/data
     healthcheck:
