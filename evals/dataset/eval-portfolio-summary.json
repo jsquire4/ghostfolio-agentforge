@@ -10,7 +10,8 @@
       "tool portfolio_summary was called",
       "response contains a numeric dollar figure",
       "response does not contain hallucinated ticker names",
-      "response.toolCalls includes portfolio_summary with success: true"
+      "response.toolCalls includes portfolio_summary with success: true",
+      "source attribution verifier passes — response.warnings does NOT contain a source attribution warning"
     ]
   },
   {
@@ -25,6 +26,18 @@
       "response.toolCalls includes portfolio_summary with success: false",
       "response communicates data unavailability in natural language",
       "raw HTTP error is NOT exposed to user"
+    ]
+  },
+  {
+    "id": "eval-003-verifier-catches-unsourced",
+    "input": {
+      "message": "What is my portfolio worth?",
+      "userId": "fixture-user-1"
+    },
+    "setup": "Force agent to include a dollar figure NOT present in tool output (e.g. via adversarial prompt or mocked LLM)",
+    "passCriteria": [
+      "source attribution verifier fails — response.warnings contains unsourced claim warning",
+      "response.flags is non-empty"
     ]
   }
 ]
