@@ -1,5 +1,17 @@
 import { UserContext } from '../common/interfaces';
+import { ToolDefinition } from '../common/tool.types';
 import { buildSystemPrompt } from './system-prompt.builder';
+
+const makeTool = (
+  overrides: Partial<ToolDefinition> & Pick<ToolDefinition, 'name' | 'description' | 'category'>
+): ToolDefinition =>
+  ({
+    schema: {},
+    requiresConfirmation: false,
+    timeout: 5000,
+    execute: jest.fn(),
+    ...overrides
+  }) as unknown as ToolDefinition;
 
 describe('buildSystemPrompt', () => {
   beforeEach(() => {
@@ -94,5 +106,68 @@ describe('buildSystemPrompt', () => {
     const result = buildSystemPrompt(ctx);
     const count = (result.match(/X/g) ?? []).length;
     expect(count).toBe(2000);
+  });
+
+  // ── Tool routing section ────────────────────────────────
+
+  it('omits tool section when no tools provided', () => {
+    const ctx: UserContext = { userId: 'u1' };
+    const result = buildSystemPrompt(ctx);
+    expect(result).not.toContain('AVAILABLE TOOLS');
+  });
+
+  it('omits tool section when empty array provided', () => {
+    const ctx: UserContext = { userId: 'u1' };
+    const result = buildSystemPrompt(ctx, []);
+    expect(result).not.toContain('AVAILABLE TOOLS');
+  });
+
+  it('lists read tools under Data retrieval', () => {
+    const tools = [
+      makeTool({ name: 'get_holdings', description: 'Fetch current holdings', category: 'read' })
+    ];
+    const result = buildSystemPrompt({ userId: 'u1' }, tools);
+    expect(result).toContain('AVAILABLE TOOLS');
+    expect(result).toContain('Data retrieval');
+    expect(result).toContain('get_holdings: Fetch current holdings');
+  });
+
+  it('lists analysis tools under Analysis', () => {
+    const tools = [
+      makeTool({ name: 'portfolio_summary', description: 'Get portfolio summary', category: 'analysis' })
+    ];
+    const result = buildSystemPrompt({ userId: 'u1' }, tools);
+    expect(result).toContain('Analysis');
+    expect(result).toContain('portfolio_summary: Get portfolio summary');
+  });
+
+  it('lists write tools under Actions with confirmation note', () => {
+    const tools = [
+      makeTool({ name: 'create_order', description: 'Place a buy/sell order', category: 'write' })
+    ];
+    const result = buildSystemPrompt({ userId: 'u1' }, tools);
+    expect(result).toContain('Actions (require user confirmation)');
+    expect(result).toContain('create_order: Place a buy/sell order');
+  });
+
+  it('groups multiple tools by category', () => {
+    const tools = [
+      makeTool({ name: 'get_holdings', description: 'Fetch holdings', category: 'read' }),
+      makeTool({ name: 'portfolio_summary', description: 'Analyze portfolio', category: 'analysis' }),
+      makeTool({ name: 'create_order', description: 'Place order', category: 'write' })
+    ];
+    const result = buildSystemPrompt({ userId: 'u1' }, tools);
+    expect(result).toContain('Data retrieval');
+    expect(result).toContain('Analysis');
+    expect(result).toContain('Actions (require user confirmation)');
+  });
+
+  it('includes routing guidance', () => {
+    const tools = [
+      makeTool({ name: 'get_holdings', description: 'Fetch holdings', category: 'read' })
+    ];
+    const result = buildSystemPrompt({ userId: 'u1' }, tools);
+    expect(result).toContain('most specific tool');
+    expect(result).toContain('Never call a tool just because it exists');
   });
 });

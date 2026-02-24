@@ -213,12 +213,10 @@ export class AgentService implements OnModuleInit {
       const { currency, language, aiPromptContext } =
         await this._loadUserContext(rawJwt);
 
-      const systemPrompt = buildSystemPrompt({
-        userId,
-        currency,
-        language,
-        aiPromptContext
-      });
+      const systemPrompt = buildSystemPrompt(
+        { userId, currency, language, aiPromptContext },
+        ALL_TOOLS
+      );
 
       const abortSignal = AbortSignal.timeout(30000);
       const toolContext: UserToolContext = {
@@ -363,12 +361,10 @@ export class AgentService implements OnModuleInit {
       const langchainTools = this._buildLangChainTools(toolContext, records);
       const { currency, language, aiPromptContext } =
         await this._loadUserContext(rawJwt);
-      const systemPrompt = buildSystemPrompt({
-        userId,
-        currency,
-        language,
-        aiPromptContext
-      });
+      const systemPrompt = buildSystemPrompt(
+        { userId, currency, language, aiPromptContext },
+        ALL_TOOLS
+      );
       const agent = this._buildAgent(systemPrompt, langchainTools);
 
       const result = await agent.invoke(
