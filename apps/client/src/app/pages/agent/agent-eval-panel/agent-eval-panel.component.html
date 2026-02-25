@@ -88,7 +88,7 @@
         <div class="error-banner">{{ errorMessage }}</div>
       }
 
-      @if (liveResults.length > 0) {
+      @if (liveResults?.length > 0) {
         <div class="live-results">
           <h4>
             Live Results
@@ -144,7 +144,7 @@
         </div>
       }
 
-      @if (historicalRuns.length > 0) {
+      @if (historicalRuns?.length > 0) {
         <div class="historical-runs">
           <h4>Recent Runs</h4>
           <table class="runs-table">

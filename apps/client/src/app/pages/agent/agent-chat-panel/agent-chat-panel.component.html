@@ -11,7 +11,7 @@
         <span class="bubble">{{ msg.content }}</span>
       </div>
     }
-    @if (messages.length === 0 && !isLoading) {
+    @if (messages?.length === 0 && !isLoading) {
       <div class="empty-state">
         <p>Ask a question about your portfolio to get started.</p>
       </div>

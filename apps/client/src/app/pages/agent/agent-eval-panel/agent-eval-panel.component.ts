@@ -254,7 +254,7 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.unsubscribeSubject))
       .subscribe({
         next: (runs) => {
-          this.historicalRuns = runs;
+          this.historicalRuns = runs ?? [];
           this.changeDetectorRef.markForCheck();
         },
         error: () => {
