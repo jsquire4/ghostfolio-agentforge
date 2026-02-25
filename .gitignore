@@ -1,5 +1,9 @@
 # See http://help.github.com/ignore-files/ for more about ignoring files.
 
+# skill docs (live in ~/.claude/skills/, not tracked in repo)
+new-gfaf-agent-tool.md
+gfaf-agent-tool-eval-factory.md
+
 # compiled output
 /out-tsc
 /tmp

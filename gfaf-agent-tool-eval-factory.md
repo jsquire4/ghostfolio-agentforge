@@ -31,6 +31,7 @@ Both tiers hit `POST /api/v1/chat` on the live agent — LLM + real Ghostfolio A
 - **Scope:** Multi-tool orchestration and user intent interpretation
 - **Purpose:** Verify the agent can plan and execute complex tasks across the full tool registry
 - **Count:** Scales with the registry (see Scaling Formula below)
+- **Persistence:** Eval run metadata (git SHA, model, tier, timing, cost estimation) stored in SQLite via `EvalsRepository`
 - **Difficulty tiers:** straightforward, ambiguous, edge (ambiguous gets the most because that's where routing breaks)
 - **When they fail:** The agent's reasoning or tool-chaining logic needs work, or tool descriptions create confusion at scale
 

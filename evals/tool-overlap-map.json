@@ -1,7 +1,12 @@
 {
   "portfolio_summary": {
-    "overlaps": [],
+    "overlaps": ["market_data"],
     "clusters": [],
-    "reason": "Hub tool — broad portfolio queries. Overlaps and clusters will grow as specific data tools are added."
+    "reason": "Hub tool — broad portfolio queries. 'How are my stocks doing' could route to either portfolio_summary or market_data."
+  },
+  "market_data": {
+    "overlaps": ["portfolio_summary"],
+    "clusters": [],
+    "reason": "Vague queries about stocks/investments could route to market_data (prices) or portfolio_summary (allocation). Clear price/quote questions route here."
   }
 }

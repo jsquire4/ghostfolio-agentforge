@@ -7,7 +7,11 @@
       "toolsCalled": ["portfolio_summary"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["VTI", "AAPL", "MSFT"],
+      "responseContains": [
+        "{{seed:holdings.etfs[0]}}",
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.equities[2]}}"
+      ],
       "responseNotContains": ["I don't know", "no information", "unable to"],
       "maxLatencyMs": 30000
     }
@@ -20,7 +24,7 @@
       "toolsCalled": ["portfolio_summary"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["VTI", "USD"],
+      "responseContains": ["{{seed:holdings.etfs[0]}}", "{{seed:currency}}"],
       "responseNotContains": ["I don't know", "no data"],
       "maxLatencyMs": 30000
     }

@@ -8,7 +8,10 @@
       "toolsCalled": ["portfolio_summary"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["VTI", "AAPL"],
+      "responseContains": [
+        "{{seed:holdings.etfs[0]}}",
+        "{{seed:holdings.equities[0]}}"
+      ],
       "responseNotContains": ["I don't know", "no information"],
       "verifiersPassed": true,
       "maxLatencyMs": 30000
