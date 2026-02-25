@@ -5,6 +5,7 @@ import type { GfEnvironment } from '@ghostfolio/ui/environment';
 // The list of file replacements can be found in `angular.json`.
 
 export const environment: GfEnvironment = {
+  agentUrl: '/agent-api',
   lastPublish: null,
   production: false
 };

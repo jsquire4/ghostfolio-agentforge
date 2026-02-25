@@ -6,12 +6,14 @@ import {
   EvalSseEvent,
   EvalSseService
 } from '@ghostfolio/client/services/agent/eval-sse.service';
+import { GF_ENVIRONMENT, GfEnvironment } from '@ghostfolio/ui/environment';
 
 import { CommonModule } from '@angular/common';
 import {
   ChangeDetectionStrategy,
   ChangeDetectorRef,
   Component,
+  Inject,
   OnDestroy,
   OnInit
 } from '@angular/core';
@@ -80,7 +82,8 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
   public constructor(
     private agentEvalService: AgentEvalService,
     private evalSseService: EvalSseService,
-    private changeDetectorRef: ChangeDetectorRef
+    private changeDetectorRef: ChangeDetectorRef,
+    @Inject(GF_ENVIRONMENT) private environment: GfEnvironment
   ) {}
 
   public ngOnInit() {
@@ -132,7 +135,8 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
     if (!reportUrl.startsWith('/api/v1/evals/reports/')) {
       return;
     }
-    window.open('http://localhost:8000' + reportUrl, '_blank');
+    const base = this.environment.agentUrl;
+    window.open(base + reportUrl.replace(/^\/api/, ''), '_blank');
   }
 
   public formatDuration(ms: number): string {

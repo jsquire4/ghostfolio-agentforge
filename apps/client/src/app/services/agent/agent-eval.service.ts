@@ -1,5 +1,7 @@
+import { GF_ENVIRONMENT, GfEnvironment } from '@ghostfolio/ui/environment';
+
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export interface EvalRunStatus {
@@ -27,27 +29,30 @@ export interface StartRunResponse {
   status: string;
 }
 
-// TODO: Replace hardcoded localhost:8000 with environment-injectable config
-// when deploying beyond local development.
-const AGENT_BASE = 'http://localhost:8000/api/v1';
-
 @Injectable({ providedIn: 'root' })
 export class AgentEvalService {
-  public constructor(private http: HttpClient) {}
+  private agentBase: string;
+
+  public constructor(
+    @Inject(GF_ENVIRONMENT) private environment: GfEnvironment,
+    private http: HttpClient
+  ) {
+    this.agentBase = `${this.environment.agentUrl}/v1`;
+  }
 
   public startRun(tier?: string, tool?: string): Observable<StartRunResponse> {
-    return this.http.post<StartRunResponse>(`${AGENT_BASE}/evals/run`, {
+    return this.http.post<StartRunResponse>(`${this.agentBase}/evals/run`, {
       tier,
       tool
     });
   }
 
   public getStatus(): Observable<EvalRunStatus> {
-    return this.http.get<EvalRunStatus>(`${AGENT_BASE}/evals/status`);
+    return this.http.get<EvalRunStatus>(`${this.agentBase}/evals/status`);
   }
 
   public getResults(limit = 20, offset = 0): Observable<EvalRunRecord[]> {
-    return this.http.get<EvalRunRecord[]>(`${AGENT_BASE}/evals/results`, {
+    return this.http.get<EvalRunRecord[]>(`${this.agentBase}/evals/results`, {
       params: { limit: limit.toString(), offset: offset.toString() }
     });
   }

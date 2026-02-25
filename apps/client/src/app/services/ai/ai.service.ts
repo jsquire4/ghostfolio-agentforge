@@ -1,5 +1,7 @@
+import { GF_ENVIRONMENT, GfEnvironment } from '@ghostfolio/ui/environment';
+
 import { HttpClient } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Inject, Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
 
 export interface ChatMessage {
@@ -12,21 +14,21 @@ export interface ChatResponse {
   message: string;
 }
 
-// TODO: Replace hardcoded localhost:8000 with environment-injectable config
-// when deploying beyond local development.
 @Injectable({ providedIn: 'root' })
 export class AiService {
-  public constructor(private http: HttpClient) {}
+  public constructor(
+    @Inject(GF_ENVIRONMENT) private environment: GfEnvironment,
+    private http: HttpClient
+  ) {}
 
   public chat(
     message: string,
     conversationId: string,
     channel = 'web-chat'
   ): Observable<ChatResponse> {
-    return this.http.post<ChatResponse>('http://localhost:8000/api/v1/chat', {
-      conversationId,
-      message,
-      channel
-    });
+    return this.http.post<ChatResponse>(
+      `${this.environment.agentUrl}/v1/chat`,
+      { conversationId, message, channel }
+    );
   }
 }

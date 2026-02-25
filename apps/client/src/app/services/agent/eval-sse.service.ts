@@ -1,6 +1,7 @@
 import { TokenStorageService } from '@ghostfolio/client/services/token-storage.service';
+import { GF_ENVIRONMENT, GfEnvironment } from '@ghostfolio/ui/environment';
 
-import { Injectable, OnDestroy } from '@angular/core';
+import { Inject, Injectable, OnDestroy } from '@angular/core';
 import { Subject } from 'rxjs';
 
 export type EvalSseEventType =
@@ -16,19 +17,21 @@ export interface EvalSseEvent {
   data: Record<string, unknown>;
 }
 
-// TODO: Replace hardcoded localhost:8000 with environment-injectable config
-// when deploying beyond local development.
-const AGENT_SSE_URL = 'http://localhost:8000/api/v1/evals/stream';
-
 @Injectable({ providedIn: 'root' })
 export class EvalSseService implements OnDestroy {
   public events$ = new Subject<EvalSseEvent>();
 
+  private agentSseUrl: string;
   private eventSource: EventSource | null = null;
   private retryCount = 0;
   private maxRetries = 3;
 
-  public constructor(private tokenStorage: TokenStorageService) {}
+  public constructor(
+    @Inject(GF_ENVIRONMENT) private environment: GfEnvironment,
+    private tokenStorage: TokenStorageService
+  ) {
+    this.agentSseUrl = `${this.environment.agentUrl}/v1/evals/stream`;
+  }
 
   public connect(): void {
     this.disconnect();
@@ -51,8 +54,8 @@ export class EvalSseService implements OnDestroy {
   private _openConnection(): void {
     const token = this.tokenStorage.getToken();
     const url = token
-      ? `${AGENT_SSE_URL}?token=${encodeURIComponent(token)}`
-      : AGENT_SSE_URL;
+      ? `${this.agentSseUrl}?token=${encodeURIComponent(token)}`
+      : this.agentSseUrl;
 
     this.eventSource = new EventSource(url);
 
