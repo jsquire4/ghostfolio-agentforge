@@ -23,7 +23,7 @@ async function bootstrap() {
     })
   );
 
-  const port = process.env.PORT ?? 8000;
+  const port = process.env.AGENT_PORT ?? 8000;
   await app.listen(port);
 }
 
