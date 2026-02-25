@@ -69,6 +69,7 @@ interface RunSummary {
 export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
   public selectedTier = 'all';
   public isRunning = false;
+  public totalCases = 0;
   public liveResults: LiveCaseResult[] = [];
   public runSummary: RunSummary | null = null;
   public errorMessage: string | null = null;
@@ -102,6 +103,7 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
     }
 
     this.isRunning = true;
+    this.totalCases = 0;
     this.liveResults = [];
     this.runSummary = null;
     this.errorMessage = null;
@@ -161,8 +163,17 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
     this.unsubscribeSubject.complete();
   }
 
+  public get progressPercent(): number {
+    if (this.totalCases === 0) return 0;
+    return (this.liveResults.length / this.totalCases) * 100;
+  }
+
   private handleSseEvent(event: EvalSseEvent) {
     switch (event.type) {
+      case 'run_started':
+        this.totalCases = (event.data['totalCases'] as number) || 0;
+        break;
+
       case 'case_result':
         this.liveResults.push({
           caseId: event.data['caseId'] as string,

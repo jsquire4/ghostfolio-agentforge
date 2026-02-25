@@ -102,7 +102,7 @@ async function chatRequest(
   jwt: string,
   evalCaseId?: string
 ): Promise<{ response: ChatResponseShape; ttftMs: number; latencyMs: number }> {
-  const port = process.env.AGENT_PORT || '3334';
+  const port = process.env.AGENT_PORT || '8000';
   const url = `http://localhost:${port}/api/v1/chat`;
   const body = JSON.stringify({ message, conversationId });
   const start = Date.now();
@@ -347,6 +347,20 @@ export async function runLabeledSuite(
     totalDurationMs,
     estimatedCost: totalCost
   };
+}
+
+/**
+ * Count total eval cases for the given tier/tool without running them.
+ */
+export function countCases(tier: string = 'all', tool?: string): number {
+  let total = 0;
+  if (tier === 'golden' || tier === 'all') {
+    total += loadGoldenCases(tool).length;
+  }
+  if (tier === 'labeled' || tier === 'all') {
+    total += loadLabeledCases(tool).length;
+  }
+  return total;
 }
 
 /**

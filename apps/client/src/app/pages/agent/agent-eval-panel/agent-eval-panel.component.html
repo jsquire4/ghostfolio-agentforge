@@ -16,7 +16,9 @@
         [disabled]="isRunning"
         (click)="onRunEvals()"
       >
-        @if (isRunning) {
+        @if (isRunning && totalCases > 0) {
+          {{ liveResults.length }}/{{ totalCases }}
+        } @else if (isRunning) {
           Running...
         } @else {
           Run Evals
@@ -26,7 +28,11 @@
   </div>
 
   @if (isRunning) {
-    <mat-progress-bar mode="indeterminate" />
+    @if (totalCases > 0) {
+      <mat-progress-bar mode="determinate" [value]="progressPercent" />
+    } @else {
+      <mat-progress-bar mode="indeterminate" />
+    }
   }
 
   <div class="eval-body">
@@ -92,7 +98,11 @@
         <div class="live-results">
           <h4>
             Live Results
-            @if (isRunning) {
+            @if (isRunning && totalCases > 0) {
+              <span class="result-count"
+                >({{ liveResults.length }}/{{ totalCases }} complete)</span
+              >
+            } @else if (isRunning) {
               <span class="result-count">({{ liveResults.length }} cases)</span>
             }
           </h4>
