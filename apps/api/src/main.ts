@@ -71,6 +71,10 @@ async function bootstrap() {
 
   app.use('/agent-api', (req: Request, res: Response) => {
     const targetPath = '/api' + req.url;
+    Logger.log(
+      `Proxy ${req.method} /agent-api${req.url} → http://${agentHost}:${agentPort}${targetPath}`,
+      'AgentProxy'
+    );
 
     // Body parser already consumed the stream, so re-serialize the parsed body
     const bodyData = req.body ? JSON.stringify(req.body) : undefined;
@@ -89,6 +93,10 @@ async function bootstrap() {
         headers
       },
       (proxyRes) => {
+        Logger.log(
+          `Proxy response ${proxyRes.statusCode} for ${req.method} ${targetPath}`,
+          'AgentProxy'
+        );
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
         proxyRes.pipe(res, { end: true });
       }

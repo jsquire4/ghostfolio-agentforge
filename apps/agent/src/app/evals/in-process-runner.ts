@@ -19,6 +19,7 @@ import {
   LabeledEvalCase
 } from './eval.types';
 
+const LOG_PREFIX = '[EvalRunner]';
 const ASSETS_DIR = resolve(__dirname, 'assets', 'evals');
 const COST_PER_TOKEN = 0.000003;
 
@@ -62,6 +63,7 @@ function loadLabeledCases(tool?: string): LabeledEvalCase[] {
 
 async function getJwt(): Promise<string> {
   if (process.env.EVAL_JWT) {
+    console.log(`${LOG_PREFIX} Using EVAL_JWT from environment`);
     return process.env.EVAL_JWT;
   }
 
@@ -70,6 +72,9 @@ async function getJwt(): Promise<string> {
     process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
 
   if (apiToken) {
+    console.log(
+      `${LOG_PREFIX} Exchanging GHOSTFOLIO_API_TOKEN for JWT via ${ghostfolioUrl}/api/v1/auth/anonymous`
+    );
     const response = await fetch(`${ghostfolioUrl}/api/v1/auth/anonymous`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -77,11 +82,13 @@ async function getJwt(): Promise<string> {
       signal: AbortSignal.timeout(10000)
     });
     if (!response.ok) {
+      const text = await response.text();
       throw new Error(
-        `Failed to exchange GHOSTFOLIO_API_TOKEN for JWT (${response.status})`
+        `Failed to exchange GHOSTFOLIO_API_TOKEN for JWT (${response.status}): ${text}`
       );
     }
     const data = (await response.json()) as { authToken: string };
+    console.log(`${LOG_PREFIX} JWT acquired via API token exchange`);
     return data.authToken;
   }
 
@@ -91,6 +98,7 @@ async function getJwt(): Promise<string> {
       'No EVAL_JWT, GHOSTFOLIO_API_TOKEN, or JWT_SECRET_KEY found'
     );
   }
+  console.log(`${LOG_PREFIX} Signing JWT with JWT_SECRET_KEY`);
   return sign({ id: 'eval-user', iat: Math.floor(Date.now() / 1000) }, secret);
 }
 
@@ -106,6 +114,11 @@ async function chatRequest(
   const url = `http://localhost:${port}/api/v1/chat`;
   const body = JSON.stringify({ message, conversationId });
   const start = Date.now();
+
+  const shortMsg = message.length > 80 ? message.slice(0, 80) + '…' : message;
+  console.log(
+    `${LOG_PREFIX} POST ${url} [case=${evalCaseId ?? 'n/a'}] "${shortMsg}"`
+  );
 
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
@@ -126,11 +139,20 @@ async function chatRequest(
 
   if (!response.ok) {
     const text = await response.text();
+    console.error(
+      `${LOG_PREFIX} Chat request FAILED (${response.status}): ${text.slice(0, 200)}`
+    );
     throw new Error(`Chat request failed (${response.status}): ${text}`);
   }
 
   const data: ChatResponseShape = await response.json();
   const latencyMs = Date.now() - start;
+
+  const toolNames =
+    data.toolCalls?.map((tc) => tc.toolName).join(', ') || 'none';
+  console.log(
+    `${LOG_PREFIX} Response OK [case=${evalCaseId ?? 'n/a'}] ${latencyMs}ms, tools=[${toolNames}]`
+  );
 
   return { response: data, ttftMs, latencyMs };
 }
@@ -145,6 +167,9 @@ export async function runGoldenSuite(
   onEvent?: OnCaseResult
 ): Promise<EvalSuiteResult> {
   const cases = loadGoldenCases(tool);
+  console.log(
+    `${LOG_PREFIX} Running golden suite: ${cases.length} cases${tool ? ` (tool=${tool})` : ''}`
+  );
   const results: EvalCaseResult[] = [];
   let totalCost = 0;
 
@@ -248,6 +273,9 @@ export async function runLabeledSuite(
   onEvent?: OnCaseResult
 ): Promise<EvalSuiteResult> {
   const cases = loadLabeledCases(tool);
+  console.log(
+    `${LOG_PREFIX} Running labeled suite: ${cases.length} cases${tool ? ` (tool=${tool})` : ''}`
+  );
   const results: EvalCaseResult[] = [];
   let totalCost = 0;
 
@@ -371,7 +399,12 @@ export async function runEvals(
   tool?: string,
   onEvent?: OnCaseResult
 ): Promise<EvalSuiteResult[]> {
+  console.log(
+    `${LOG_PREFIX} runEvals called: tier=${tier}, tool=${tool ?? 'all'}`
+  );
+  console.log(`${LOG_PREFIX} ASSETS_DIR=${ASSETS_DIR}`);
   const jwt = await getJwt();
+  console.log(`${LOG_PREFIX} JWT acquired (length=${jwt.length})`);
   const suites: EvalSuiteResult[] = [];
 
   if (tier === 'golden' || tier === 'all') {

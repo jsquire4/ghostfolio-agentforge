@@ -2,6 +2,7 @@ import { OrderService } from '@ghostfolio/api/app/order/order.service';
 import { SubscriptionService } from '@ghostfolio/api/app/subscription/subscription.service';
 import { environment } from '@ghostfolio/api/environments/environment';
 import { PortfolioChangedEvent } from '@ghostfolio/api/events/portfolio-changed.event';
+import { UserCreatedEvent } from '@ghostfolio/api/events/user-created.event';
 import { getRandomString } from '@ghostfolio/api/helper/string.helper';
 import { AccountClusterRiskCurrentInvestment } from '@ghostfolio/api/models/rules/account-cluster-risk/current-investment';
 import { AccountClusterRiskSingleAccount } from '@ghostfolio/api/models/rules/account-cluster-risk/single-account';
@@ -606,6 +607,20 @@ export class UserService {
         }
       }
     });
+
+    const accounts = await this.prismaService.account.findMany({
+      where: { userId: user.id }
+    });
+
+    if (accounts.length > 0) {
+      this.eventEmitter.emit(
+        UserCreatedEvent.getName(),
+        new UserCreatedEvent({
+          userId: user.id,
+          accountId: accounts[0].id
+        })
+      );
+    }
 
     if (this.configurationService.get('ENABLE_FEATURE_SUBSCRIPTION')) {
       await this.prismaService.analytics.create({

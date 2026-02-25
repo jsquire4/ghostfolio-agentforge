@@ -1,0 +1,192 @@
+[
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-15T00:00:00.000Z",
+    "fee": 4.95,
+    "quantity": 10,
+    "symbol": "AAPL",
+    "type": "BUY",
+    "unitPrice": 185.0
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-16T00:00:00.000Z",
+    "fee": 4.95,
+    "quantity": 5,
+    "symbol": "GOOGL",
+    "type": "BUY",
+    "unitPrice": 141.8
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-17T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 8,
+    "symbol": "MSFT",
+    "type": "BUY",
+    "unitPrice": 388.5
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-18T00:00:00.000Z",
+    "fee": 4.95,
+    "quantity": 3,
+    "symbol": "AMZN",
+    "type": "BUY",
+    "unitPrice": 155.2
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-19T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 15,
+    "symbol": "VTI",
+    "type": "BUY",
+    "unitPrice": 237.45
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-22T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 20,
+    "symbol": "BND",
+    "type": "BUY",
+    "unitPrice": 72.5
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-01-23T00:00:00.000Z",
+    "fee": 5.11,
+    "quantity": 10,
+    "symbol": "VXUS",
+    "type": "BUY",
+    "unitPrice": 55.3
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-06-10T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 3,
+    "symbol": "AAPL",
+    "type": "SELL",
+    "unitPrice": 227.5033
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-03-15T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 7,
+    "symbol": "AAPL",
+    "type": "DIVIDEND",
+    "unitPrice": 0.25
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-06-15T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 7,
+    "symbol": "AAPL",
+    "type": "DIVIDEND",
+    "unitPrice": 0.25
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-09-15T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 7,
+    "symbol": "AAPL",
+    "type": "DIVIDEND",
+    "unitPrice": 0.25
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-03-20T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 8,
+    "symbol": "MSFT",
+    "type": "DIVIDEND",
+    "unitPrice": 0.75
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-06-20T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 8,
+    "symbol": "MSFT",
+    "type": "DIVIDEND",
+    "unitPrice": 0.75
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-04-01T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 15,
+    "symbol": "VTI",
+    "type": "DIVIDEND",
+    "unitPrice": 0.4267
+  },
+  {
+    "currency": "USD",
+    "dataSource": "YAHOO",
+    "date": "2024-07-01T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 15,
+    "symbol": "VTI",
+    "type": "DIVIDEND",
+    "unitPrice": 0.4267
+  },
+  {
+    "currency": "USD",
+    "dataSource": "MANUAL",
+    "date": "2024-06-30T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 20,
+    "symbol": "BND",
+    "type": "INTEREST",
+    "unitPrice": 2.03125
+  },
+  {
+    "currency": "USD",
+    "dataSource": "MANUAL",
+    "date": "2024-12-31T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 20,
+    "symbol": "BND",
+    "type": "INTEREST",
+    "unitPrice": 2.03125
+  },
+  {
+    "currency": "USD",
+    "dataSource": "MANUAL",
+    "date": "2024-06-30T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 1,
+    "symbol": "Platform Fee",
+    "type": "FEE",
+    "unitPrice": 12.0
+  },
+  {
+    "currency": "USD",
+    "dataSource": "MANUAL",
+    "date": "2024-12-31T00:00:00.000Z",
+    "fee": 0,
+    "quantity": 1,
+    "symbol": "Platform Fee",
+    "type": "FEE",
+    "unitPrice": 12.0
+  }
+]
