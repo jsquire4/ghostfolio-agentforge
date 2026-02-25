@@ -72,13 +72,21 @@ async function bootstrap() {
   app.use('/agent-api', (req: Request, res: Response) => {
     const targetPath = '/api' + req.url;
 
+    // Body parser already consumed the stream, so re-serialize the parsed body
+    const bodyData = req.body ? JSON.stringify(req.body) : undefined;
+    const headers = { ...req.headers, host: `${agentHost}:${agentPort}` };
+
+    if (bodyData) {
+      headers['content-length'] = Buffer.byteLength(bodyData).toString();
+    }
+
     const proxyReq = httpRequest(
       {
         hostname: agentHost,
         port: agentPort,
         path: targetPath,
         method: req.method,
-        headers: { ...req.headers, host: `${agentHost}:${agentPort}` }
+        headers
       },
       (proxyRes) => {
         res.writeHead(proxyRes.statusCode, proxyRes.headers);
@@ -97,7 +105,11 @@ async function bootstrap() {
       }
     });
 
-    req.pipe(proxyReq, { end: true });
+    if (bodyData) {
+      proxyReq.end(bodyData);
+    } else {
+      proxyReq.end();
+    }
   });
 
   if (configService.get<string>('ENABLE_FEATURE_SUBSCRIPTION') === 'true') {
