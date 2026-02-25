@@ -49,6 +49,10 @@ COPY prisma /ghostfolio/dist/apps/api/prisma/
 COPY package.json /ghostfolio/dist/apps/api/
 RUN npm run database:generate-typings
 
+# Install agent dependencies (better-sqlite3 needs build tools from builder stage)
+WORKDIR /ghostfolio/dist/apps/agent
+RUN npm install --omit=dev
+
 # Image to run, copy everything needed from builder
 FROM node:22-slim
 LABEL org.opencontainers.image.source="https://github.com/ghostfolio/ghostfolio"

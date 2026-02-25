@@ -87,7 +87,10 @@ async function bootstrap() {
     );
 
     proxyReq.on('error', (err) => {
-      Logger.error(`Agent proxy error: ${err.message}`, 'AgentProxy');
+      Logger.error(
+        `Agent proxy error: ${err.message} (${err['code'] || 'unknown'})`,
+        'AgentProxy'
+      );
 
       if (!res.headersSent) {
         res.status(502).json({ error: 'Agent unavailable' });
