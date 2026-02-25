@@ -1,19 +1,6 @@
+import { makeToolDefinition } from '../../test-fixtures';
 import { UserContext } from '../common/interfaces';
-import { ToolDefinition } from '../common/tool.types';
 import { buildSystemPrompt } from './system-prompt.builder';
-
-const makeTool = (
-  overrides: Partial<ToolDefinition> &
-    Pick<ToolDefinition, 'name' | 'description' | 'category'>
-): ToolDefinition =>
-  ({
-    schema: {},
-    consequenceLevel: 'low',
-    requiresConfirmation: false,
-    timeout: 5000,
-    execute: jest.fn(),
-    ...overrides
-  }) as unknown as ToolDefinition;
 
 describe('buildSystemPrompt', () => {
   beforeEach(() => {
@@ -127,7 +114,7 @@ describe('buildSystemPrompt', () => {
 
   it('lists read tools under Data retrieval', () => {
     const tools = [
-      makeTool({
+      makeToolDefinition({
         name: 'get_holdings',
         description: 'Fetch current holdings',
         category: 'read'
@@ -141,7 +128,7 @@ describe('buildSystemPrompt', () => {
 
   it('lists analysis tools under Analysis', () => {
     const tools = [
-      makeTool({
+      makeToolDefinition({
         name: 'portfolio_summary',
         description: 'Get portfolio summary',
         category: 'analysis'
@@ -154,7 +141,7 @@ describe('buildSystemPrompt', () => {
 
   it('lists write tools under Actions with confirmation note', () => {
     const tools = [
-      makeTool({
+      makeToolDefinition({
         name: 'create_order',
         description: 'Place a buy/sell order',
         category: 'write'
@@ -167,17 +154,17 @@ describe('buildSystemPrompt', () => {
 
   it('groups multiple tools by category', () => {
     const tools = [
-      makeTool({
+      makeToolDefinition({
         name: 'get_holdings',
         description: 'Fetch holdings',
         category: 'read'
       }),
-      makeTool({
+      makeToolDefinition({
         name: 'portfolio_summary',
         description: 'Analyze portfolio',
         category: 'analysis'
       }),
-      makeTool({
+      makeToolDefinition({
         name: 'create_order',
         description: 'Place order',
         category: 'write'
@@ -217,7 +204,7 @@ describe('buildSystemPrompt', () => {
 
   it('includes routing guidance', () => {
     const tools = [
-      makeTool({
+      makeToolDefinition({
         name: 'get_holdings',
         description: 'Fetch holdings',
         category: 'read'

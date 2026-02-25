@@ -84,7 +84,7 @@ export const holdingsFixture = {
       investment: 24271.43,
       valueInBaseCurrency: 25000.0,
       allocationInPercentage: 0.25,
-      assetClass: 'EQUITY',
+      assetClass: 'FIXED_INCOME',
       assetSubClass: 'ETF',
       countries: [],
       sectors: [],

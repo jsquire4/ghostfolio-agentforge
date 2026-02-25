@@ -96,18 +96,18 @@ export function buildSystemPrompt(
   const formats = caps.supportedFormats;
   const formatLines: string[] = ['FORMATTING:'];
 
-  if (formats.includes('html') && formats.includes('plain')) {
+  if (formats.length === 1 && formats[0] === 'csv') {
+    formatLines.push(
+      '- Respond only with CSV.',
+      '- No prose, no headers outside the CSV.'
+    );
+  } else if (formats.includes('markdown')) {
+    formatLines.push('- Use markdown for formatting.');
+  } else if (formats.includes('html') && formats.includes('plain')) {
     formatLines.push(
       '- Use plain text for short answers.',
       '- Use HTML tables and lists for structured data.',
       '- No markdown.'
-    );
-  } else if (formats.includes('markdown')) {
-    formatLines.push('- Use markdown for formatting.');
-  } else if (formats.includes('csv')) {
-    formatLines.push(
-      '- Respond only with CSV.',
-      '- No prose, no headers outside the CSV.'
     );
   } else {
     formatLines.push('- Plain text only. No markdown, no HTML.');

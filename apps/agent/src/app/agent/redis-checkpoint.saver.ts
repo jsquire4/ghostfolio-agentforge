@@ -104,27 +104,11 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
 
     const ckptKey = checkpointKey(threadId, ns, checkpointId);
     const raw = await this.redis.hgetall(ckptKey);
-
-    // hgetall returns {} when the key does not exist.
     if (!raw?.['type'] || !raw['data']) return undefined;
 
-    const checkpoint = (await this.serde.loadsTyped(
-      raw['type'],
-      raw['data']
-    )) as Checkpoint;
+    const { checkpoint, metadata, parentCheckpointId } =
+      await this._deserializeCheckpoint(raw);
 
-    const metadata =
-      raw['metadata_type'] && raw['metadata_data']
-        ? ((await this.serde.loadsTyped(
-            raw['metadata_type'],
-            raw['metadata_data']
-          )) as CheckpointMetadata)
-        : ({ source: 'loop', step: -1, parents: {} } as CheckpointMetadata);
-
-    const parentCheckpointId: string | undefined =
-      raw['parent_checkpoint_id'] || undefined;
-
-    // Fetch pending writes for this checkpoint.
     const pendingWrites = await this._loadPendingWrites(
       threadId,
       ns,
@@ -205,18 +189,8 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
       const raw = await this.redis.hgetall(ckptKey);
       if (!raw?.['type'] || !raw['data']) continue;
 
-      const checkpoint = (await this.serde.loadsTyped(
-        raw['type'],
-        raw['data']
-      )) as Checkpoint;
-
-      const metadata =
-        raw['metadata_type'] && raw['metadata_data']
-          ? ((await this.serde.loadsTyped(
-              raw['metadata_type'],
-              raw['metadata_data']
-            )) as CheckpointMetadata)
-          : ({ source: 'loop', step: -1, parents: {} } as CheckpointMetadata);
+      const { checkpoint, metadata, parentCheckpointId } =
+        await this._deserializeCheckpoint(raw);
 
       // Apply metadata filter if provided.
       if (filter) {
@@ -225,9 +199,6 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
         );
         if (!passes) continue;
       }
-
-      const parentCheckpointId: string | undefined =
-        raw['parent_checkpoint_id'] || undefined;
 
       const pendingWrites = await this._loadPendingWrites(
         threadId,
@@ -430,15 +401,34 @@ export class RedisCheckpointSaver extends BaseCheckpointSaver {
   // Private helpers
   // -------------------------------------------------------------------------
 
+  private async _deserializeCheckpoint(raw: Record<string, string>): Promise<{
+    checkpoint: Checkpoint;
+    metadata: CheckpointMetadata;
+    parentCheckpointId: string | undefined;
+  }> {
+    const checkpoint = (await this.serde.loadsTyped(
+      raw['type'],
+      raw['data']
+    )) as Checkpoint;
+
+    const metadata =
+      raw['metadata_type'] && raw['metadata_data']
+        ? ((await this.serde.loadsTyped(
+            raw['metadata_type'],
+            raw['metadata_data']
+          )) as CheckpointMetadata)
+        : ({ source: 'loop', step: -1, parents: {} } as CheckpointMetadata);
+
+    const parentCheckpointId: string | undefined =
+      raw['parent_checkpoint_id'] || undefined;
+
+    return { checkpoint, metadata, parentCheckpointId };
+  }
+
   /**
-   * Load all pending writes stored under the writes key pattern for a given
-   * thread / namespace / checkpoint combination.
-   *
-   * Writes keys follow the pattern:
-   *   lg:writes:{thread_id}:{ns}:{checkpoint_id}:{task_id}:{idx}
-   *
-   * We track all such keys in the thread-keys Set, so we SMEMBERS that set and
-   * filter to writes for this checkpoint.
+   * Load all pending writes for a checkpoint. O(n) in the number of keys
+   * tracked for the thread — SMEMBERS returns all keys, then we filter to the
+   * matching writes prefix.
    */
   private async _loadPendingWrites(
     threadId: string,

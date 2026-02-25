@@ -3,7 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { ToolMetricsRecord } from '../common/storage.types';
+import { makeToolMetricsRecord } from '../../test-fixtures';
 import { DatabaseService } from './database.service';
 import { ToolMetricsRepository } from './tool-metrics.repository';
 
@@ -11,18 +11,6 @@ describe('ToolMetricsRepository', () => {
   let dbService: DatabaseService;
   let repo: ToolMetricsRepository;
   let tmpDir: string;
-
-  const makeRecord = (
-    overrides?: Partial<ToolMetricsRecord>
-  ): ToolMetricsRecord => ({
-    id: 'tm-1',
-    requestMetricsId: 'req-1',
-    toolName: 'portfolio-summary',
-    calledAt: '2025-06-15T12:00:00.000Z',
-    durationMs: 200,
-    success: true,
-    ...overrides
-  });
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'tool-metrics-repo-test-'));
@@ -50,8 +38,11 @@ describe('ToolMetricsRepository', () => {
 
   it('insertMany and getByRequest returns records in order', () => {
     const records = [
-      makeRecord({ id: 'tm-1', calledAt: '2025-06-15T12:00:00.000Z' }),
-      makeRecord({
+      makeToolMetricsRecord({
+        id: 'tm-1',
+        calledAt: '2025-06-15T12:00:00.000Z'
+      }),
+      makeToolMetricsRecord({
         id: 'tm-2',
         calledAt: '2025-06-15T12:01:00.000Z',
         toolName: 'account-list'
@@ -73,9 +64,9 @@ describe('ToolMetricsRepository', () => {
 
   it('getToolPerformance returns records for a specific tool', () => {
     repo.insertMany([
-      makeRecord({ id: 'tm-1', toolName: 'portfolio-summary' }),
-      makeRecord({ id: 'tm-2', toolName: 'account-list' }),
-      makeRecord({
+      makeToolMetricsRecord({ id: 'tm-1', toolName: 'portfolio-summary' }),
+      makeToolMetricsRecord({ id: 'tm-2', toolName: 'account-list' }),
+      makeToolMetricsRecord({
         id: 'tm-3',
         toolName: 'portfolio-summary',
         calledAt: '2025-06-15T12:05:00.000Z'
@@ -91,9 +82,18 @@ describe('ToolMetricsRepository', () => {
 
   it('getToolPerformance respects limit', () => {
     repo.insertMany([
-      makeRecord({ id: 'tm-1', calledAt: '2025-06-15T12:00:00.000Z' }),
-      makeRecord({ id: 'tm-2', calledAt: '2025-06-15T12:01:00.000Z' }),
-      makeRecord({ id: 'tm-3', calledAt: '2025-06-15T12:02:00.000Z' })
+      makeToolMetricsRecord({
+        id: 'tm-1',
+        calledAt: '2025-06-15T12:00:00.000Z'
+      }),
+      makeToolMetricsRecord({
+        id: 'tm-2',
+        calledAt: '2025-06-15T12:01:00.000Z'
+      }),
+      makeToolMetricsRecord({
+        id: 'tm-3',
+        calledAt: '2025-06-15T12:02:00.000Z'
+      })
     ]);
 
     const result = repo.getToolPerformance('portfolio-summary', 2);
@@ -102,19 +102,19 @@ describe('ToolMetricsRepository', () => {
 
   it('getToolSummary returns aggregated stats per tool', () => {
     repo.insertMany([
-      makeRecord({
+      makeToolMetricsRecord({
         id: 'tm-1',
         toolName: 'portfolio-summary',
         durationMs: 100,
         success: true
       }),
-      makeRecord({
+      makeToolMetricsRecord({
         id: 'tm-2',
         toolName: 'portfolio-summary',
         durationMs: 300,
         success: false
       }),
-      makeRecord({
+      makeToolMetricsRecord({
         id: 'tm-3',
         toolName: 'account-list',
         durationMs: 50,
@@ -137,7 +137,7 @@ describe('ToolMetricsRepository', () => {
 
   it('stores and retrieves error field', () => {
     repo.insertMany([
-      makeRecord({ id: 'tm-1', success: false, error: 'timeout' })
+      makeToolMetricsRecord({ id: 'tm-1', success: false, error: 'timeout' })
     ]);
 
     const result = repo.getByRequest('req-1');
@@ -146,7 +146,7 @@ describe('ToolMetricsRepository', () => {
   });
 
   it('error is undefined when not provided', () => {
-    repo.insertMany([makeRecord()]);
+    repo.insertMany([makeToolMetricsRecord()]);
     const result = repo.getByRequest('req-1');
     expect(result[0].error).toBeUndefined();
   });

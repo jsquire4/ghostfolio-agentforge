@@ -3,12 +3,14 @@ import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
 import { PortfolioSnapshot } from './snapshot';
+import { TierStalenessReport } from './stale';
 import { EvalSuiteResult } from './types';
 
 interface FullReport {
   generatedAt: string;
   snapshot: PortfolioSnapshot;
   suites: EvalSuiteResult[];
+  staleness?: TierStalenessReport[];
   summary: {
     totalPassed: number;
     totalFailed: number;
@@ -19,7 +21,8 @@ interface FullReport {
 
 function buildReport(
   snapshot: PortfolioSnapshot,
-  suites: EvalSuiteResult[]
+  suites: EvalSuiteResult[],
+  staleness?: TierStalenessReport[]
 ): FullReport {
   const totalPassed = suites.reduce((s, r) => s + r.totalPassed, 0);
   const totalFailed = suites.reduce((s, r) => s + r.totalFailed, 0);
@@ -30,6 +33,7 @@ function buildReport(
     generatedAt: new Date().toISOString(),
     summary: { totalPassed, totalFailed, totalDurationMs, estimatedCost },
     suites,
+    staleness,
     snapshot
   };
 }
@@ -39,9 +43,10 @@ function buildReport(
 export function writeJsonReport(
   snapshot: PortfolioSnapshot,
   suites: EvalSuiteResult[],
-  outDir: string
+  outDir: string,
+  staleness?: TierStalenessReport[]
 ): string {
-  const report = buildReport(snapshot, suites);
+  const report = buildReport(snapshot, suites, staleness);
   const filename = `eval-report-${new Date().toISOString().replace(/[:.]/g, '-')}.json`;
   const filepath = resolve(outDir, filename);
   writeFileSync(filepath, JSON.stringify(report, null, 2));
@@ -74,9 +79,10 @@ function fmtMs(ms: number): string {
 export function writeHtmlReport(
   snapshot: PortfolioSnapshot,
   suites: EvalSuiteResult[],
-  outDir: string
+  outDir: string,
+  staleness?: TierStalenessReport[]
 ): string {
-  const report = buildReport(snapshot, suites);
+  const report = buildReport(snapshot, suites, staleness);
   const filename = `eval-report-${new Date().toISOString().replace(/[:.]/g, '-')}.html`;
   const filepath = resolve(outDir, filename);
 
@@ -366,6 +372,74 @@ export function writeHtmlReport(
       ? `
   <h3>Snapshot Errors</h3>
   <ul>${snapshot.errors.map((e) => `<li class="fail">${escHtml(e)}</li>`).join('')}</ul>`
+      : ''
+  }
+
+  ${
+    report.staleness &&
+    report.staleness.some(
+      (s) =>
+        s.stale.length + s.dormant.length + s.flaky.length + s.orphaned.length >
+        0
+    )
+      ? `
+  <h2>Eval Staleness</h2>
+  ${report.staleness
+    .map((sr) => {
+      const items = [
+        ...sr.stale.map((s) => ({
+          cls: 'fail',
+          icon: '\u2717',
+          label: 'Stale',
+          id: s.caseId,
+          detail: `${(s.failRate * 100).toFixed(0)}% fail rate (${s.failures}/${s.totalRuns}) \u00b7 last run ${s.daysSinceLastRun}d ago`,
+          error: s.lastError
+        })),
+        ...sr.dormant.map((d) => ({
+          cls: 'dim',
+          icon: '\u25cb',
+          label: 'Dormant',
+          id: d.caseId,
+          detail: `${d.passes}/${d.totalRuns} passed \u00b7 last run ${d.daysSinceLastRun}d ago`,
+          error: null as string | null
+        })),
+        ...sr.flaky.map((f) => ({
+          cls: 'warn',
+          icon: '~',
+          label: 'Flaky',
+          id: f.caseId,
+          detail: `${(f.failRate * 100).toFixed(0)}% fail rate (${f.passes} pass, ${f.failures} fail)`,
+          error: null as string | null
+        })),
+        ...sr.orphaned.map((o) => ({
+          cls: 'dim',
+          icon: '?',
+          label: 'Orphaned',
+          id: o.caseId,
+          detail: o.file,
+          error: null as string | null
+        }))
+      ];
+      if (items.length === 0) return '';
+      const rows = items
+        .map(
+          (i) => `
+        <tr class="${i.cls === 'fail' ? 'failed-row' : ''}">
+          <td class="${i.cls}">${i.icon}</td>
+          <td><strong>${escHtml(i.label)}</strong></td>
+          <td>${escHtml(i.id)}</td>
+          <td>${escHtml(i.detail)}${i.error ? `<br><small>${escHtml(i.error.length > 120 ? i.error.slice(0, 117) + '...' : i.error)}</small>` : ''}</td>
+        </tr>`
+        )
+        .join('');
+      return `
+    <h3>${sr.tier.charAt(0).toUpperCase() + sr.tier.slice(1)} (${sr.staleThresholdDays}-day threshold)</h3>
+    <table>
+      <thead><tr><th></th><th>Status</th><th>Case ID</th><th>Details</th></tr></thead>
+      <tbody>${rows}</tbody>
+    </table>`;
+    })
+    .join('')}`
       : ''
   }
 

@@ -72,18 +72,13 @@ describe('MetricsController', () => {
   });
 
   it('getMetrics calls getByUser with default limit/offset', () => {
-    controller.getMetrics(user);
+    controller.getMetrics(user, 50, 0);
     expect(mockMetricsRepo.getByUser).toHaveBeenCalledWith('user-1', 50, 0);
   });
 
-  it('getMetrics passes parsed limit and offset', () => {
-    controller.getMetrics(user, '10', '5');
+  it('getMetrics passes provided limit and offset', () => {
+    controller.getMetrics(user, 10, 5);
     expect(mockMetricsRepo.getByUser).toHaveBeenCalledWith('user-1', 10, 5);
-  });
-
-  it('getMetrics falls back to defaults on non-numeric input', () => {
-    controller.getMetrics(user, 'abc', 'xyz');
-    expect(mockMetricsRepo.getByUser).toHaveBeenCalledWith('user-1', 50, 0);
   });
 
   it('getSummary calls getAggregateByUser', () => {
@@ -107,26 +102,22 @@ describe('MetricsController', () => {
   });
 
   it('getToolPerformance calls getToolPerformance with default limit', () => {
-    controller.getToolPerformance('portfolio-summary');
+    controller.getToolPerformance('portfolio-summary', 50);
     expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
       'portfolio-summary',
       50
     );
   });
 
-  it('getToolPerformance passes parsed limit', () => {
-    controller.getToolPerformance('portfolio-summary', '10');
+  it('getToolPerformance passes provided limit', () => {
+    controller.getToolPerformance('portfolio-summary', 10);
     expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
       'portfolio-summary',
       10
     );
   });
 
-  it('getToolPerformance falls back to default on non-numeric limit', () => {
-    controller.getToolPerformance('portfolio-summary', 'abc');
-    expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
-      'portfolio-summary',
-      50
-    );
-  });
+  // Note: ParseIntPipe validation (HTTP 400 on non-numeric input) is tested
+  // via NestJS e2e tests, not unit tests — unit tests call controller methods
+  // directly, bypassing the pipe chain.
 });

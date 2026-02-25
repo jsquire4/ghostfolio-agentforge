@@ -27,6 +27,7 @@ import {
   UserToolContext
 } from '../common/interfaces';
 import { ToolMetricsRecord } from '../common/storage.types';
+import { InsightRepository } from '../database/insight.repository';
 import { MetricsRepository } from '../database/metrics.repository';
 import { ToolMetricsRepository } from '../database/tool-metrics.repository';
 import { GhostfolioClientService } from '../ghostfolio/ghostfolio-client.service';
@@ -39,6 +40,20 @@ import { estimateCostUsd } from './llm-cost-rates';
 import { PendingActionsService } from './pending-actions.service';
 import { RedisCheckpointSaver } from './redis-checkpoint.saver';
 import { buildSystemPrompt } from './system-prompt.builder';
+
+// ---------------------------------------------------------------------------
+// Constants
+// ---------------------------------------------------------------------------
+
+const AGENT_TIMEOUT_MS = 30_000;
+const MAX_TOKENS = 2048;
+const TEMPERATURE = 0;
+const HITL_EXPIRY_MS = 15 * 60 * 1000;
+const DEFAULT_MODEL = 'gpt-4o-mini';
+
+// ---------------------------------------------------------------------------
+// Internal types
+// ---------------------------------------------------------------------------
 
 class TokenAccumulator extends BaseCallbackHandler {
   name = 'TokenAccumulator';
@@ -55,6 +70,43 @@ class TokenAccumulator extends BaseCallbackHandler {
   }
 }
 
+interface MetricsParams {
+  conversationId: string;
+  userId: string;
+  requestStart: number;
+  tokenAccumulator: TokenAccumulator;
+  records: ToolCallRecord[];
+  warnings: string[];
+  flags: string[];
+  channel?: string;
+  langsmithRunId?: string;
+}
+
+interface AgentRequestParams {
+  userId: string;
+  rawJwt: string;
+  conversationId: string;
+  threadId: string;
+  channel?: string;
+  message?: string;
+  resumeCommand?: unknown;
+  evalCaseId?: string;
+  actionId?: string;
+  toolName?: string;
+}
+
+interface AgentRequestResult {
+  agentResult: unknown;
+  records: ToolCallRecord[];
+  tokenAccumulator: TokenAccumulator;
+  runId: string;
+  requestStart: number;
+}
+
+// ---------------------------------------------------------------------------
+// Service
+// ---------------------------------------------------------------------------
+
 @Injectable()
 export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
@@ -69,6 +121,7 @@ export class AgentService implements OnModuleInit {
     private readonly pendingActionsService: PendingActionsService,
     private readonly hitlMatrixService: HitlMatrixService,
     private readonly auditService: AuditService,
+    private readonly insightRepository: InsightRepository,
     private readonly metricsRepository: MetricsRepository,
     private readonly toolMetricsRepository: ToolMetricsRepository,
     private readonly configService: ConfigService,
@@ -84,15 +137,14 @@ export class AgentService implements OnModuleInit {
     }
 
     this.checkpointSaver = new RedisCheckpointSaver(this.redisClient);
-    this.modelName = 'gpt-4o-mini';
+    this.modelName = DEFAULT_MODEL;
     this.llm = new ChatOpenAI({
       model: this.modelName,
-      temperature: 0,
-      maxTokens: 2048,
-      timeout: 30000
+      temperature: TEMPERATURE,
+      maxTokens: MAX_TOKENS,
+      timeout: AGENT_TIMEOUT_MS
     });
 
-    // Register all tools from the barrel — no manual manifest editing required
     ALL_TOOLS.forEach((t) => this.toolRegistry.register(t));
 
     this.logger.log(
@@ -104,8 +156,6 @@ export class AgentService implements OnModuleInit {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /** Load user settings and AI prompt context from Ghostfolio. Failures are
-   *  swallowed so the agent always has a usable (possibly empty) context. */
   private async _loadUserContext(rawJwt: string): Promise<{
     currency?: string;
     language?: string;
@@ -138,11 +188,21 @@ export class AgentService implements OnModuleInit {
     return { currency, language, aiPromptContext };
   }
 
-  /** Wrap every registered tool definition in a LangChain StructuredTool that
-   *  records call metadata into the caller-owned `records` array.
-   *
-   *  `records` MUST be a local variable in the caller — never a class property
-   *  (class property would cause cross-user data leaks under concurrent requests). */
+  private _buildToolContext(
+    userId: string,
+    abortSignal: AbortSignal,
+    rawJwt: string,
+    autoApproveTools: Set<string>
+  ): UserToolContext {
+    return {
+      userId,
+      abortSignal,
+      auth: { mode: 'user', jwt: rawJwt },
+      client: this.ghostfolioClient,
+      autoApproveTools
+    };
+  }
+
   private _buildLangChainTools(
     toolContext: UserToolContext,
     records: ToolCallRecord[]
@@ -172,9 +232,6 @@ export class AgentService implements OnModuleInit {
     );
   }
 
-  /** Compile a fresh ReAct agent for a single request.
-   *  Tools close over the per-request JWT so the agent must never be reused
-   *  across calls. */
   private _buildAgent(
     systemPrompt: string,
     langchainTools: StructuredTool[]
@@ -187,7 +244,6 @@ export class AgentService implements OnModuleInit {
     });
   }
 
-  /** Extract the final text response from the agent invoke result. */
   private _extractLastMessage(result: unknown): string {
     const messages = (result as { messages?: unknown[] }).messages ?? [];
     const lastMessage = messages[messages.length - 1] as
@@ -198,7 +254,6 @@ export class AgentService implements OnModuleInit {
       : JSON.stringify(lastMessage?.content ?? '');
   }
 
-  /** Run verification and assemble the final ChatResponse. */
   private async _buildVerifiedResponse(
     agentResponse: string,
     records: ToolCallRecord[],
@@ -207,12 +262,28 @@ export class AgentService implements OnModuleInit {
     pendingConfirmations?: PendingAction[],
     channel?: string
   ): Promise<ChatResponse> {
-    const { warnings, flags } = await this.verificationService.runAll(
-      agentResponse,
-      records,
-      userId,
-      channel
-    );
+    const { warnings, flags, insightData } =
+      await this.verificationService.runAll(
+        agentResponse,
+        records,
+        userId,
+        channel
+      );
+
+    if (insightData) {
+      try {
+        this.insightRepository.insert({
+          id: randomUUID(),
+          userId,
+          ...insightData,
+          createdAt: new Date().toISOString()
+        });
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        this.logger.error(`Failed to persist insight record: ${msg}`);
+      }
+    }
+
     return {
       message: agentResponse,
       conversationId,
@@ -223,45 +294,35 @@ export class AgentService implements OnModuleInit {
     };
   }
 
-  /** Persist request-level observability metrics. Best-effort — never throws. */
-  private _persistMetrics(
-    conversationId: string,
-    userId: string,
-    requestStart: number,
-    tokenAccumulator: TokenAccumulator,
-    records: ToolCallRecord[],
-    warnings: string[],
-    flags: string[],
-    channel?: string,
-    langsmithRunId?: string
-  ): void {
+  private _persistMetrics(params: MetricsParams): void {
     try {
-      const successCount = records.filter((r) => r.success).length;
+      const successCount = params.records.filter((r) => r.success).length;
       const metrics: RequestMetrics = {
         id: randomUUID(),
-        userId,
-        conversationId,
-        requestedAt: new Date(requestStart).toISOString(),
-        totalLatencyMs: Date.now() - requestStart,
-        tokensIn: tokenAccumulator.tokensIn,
-        tokensOut: tokenAccumulator.tokensOut,
+        userId: params.userId,
+        conversationId: params.conversationId,
+        requestedAt: new Date(params.requestStart).toISOString(),
+        totalLatencyMs: Date.now() - params.requestStart,
+        tokensIn: params.tokenAccumulator.tokensIn,
+        tokensOut: params.tokenAccumulator.tokensOut,
         estimatedCostUsd: estimateCostUsd(
           this.modelName,
-          tokenAccumulator.tokensIn,
-          tokenAccumulator.tokensOut
+          params.tokenAccumulator.tokensIn,
+          params.tokenAccumulator.tokensOut
         ),
-        toolCallCount: records.length,
+        toolCallCount: params.records.length,
         toolSuccessCount: successCount,
-        toolSuccessRate: records.length > 0 ? successCount / records.length : 1,
-        verifierWarningCount: warnings.length,
-        verifierFlagCount: flags.length,
-        channel,
-        langsmithRunId
+        toolSuccessRate:
+          params.records.length > 0 ? successCount / params.records.length : 1,
+        verifierWarningCount: params.warnings.length,
+        verifierFlagCount: params.flags.length,
+        channel: params.channel,
+        langsmithRunId: params.langsmithRunId
       };
       this.metricsRepository.insert(metrics);
 
-      if (records.length > 0) {
-        const toolMetrics: ToolMetricsRecord[] = records.map((r) => {
+      if (params.records.length > 0) {
+        const toolMetrics: ToolMetricsRecord[] = params.records.map((r) => {
           let error: string | undefined;
           try {
             const parsed = JSON.parse(r.result);
@@ -286,6 +347,87 @@ export class AgentService implements OnModuleInit {
     }
   }
 
+  private async _runAgentRequest(
+    params: AgentRequestParams
+  ): Promise<AgentRequestResult> {
+    const requestStart = Date.now();
+    const tokenAccumulator = new TokenAccumulator();
+    const records: ToolCallRecord[] = [];
+
+    const { currency, language, aiPromptContext } = await this._loadUserContext(
+      params.rawJwt
+    );
+
+    const systemPrompt = buildSystemPrompt(
+      {
+        userId: params.userId,
+        currency,
+        language,
+        aiPromptContext
+      },
+      ALL_TOOLS,
+      params.channel
+    );
+
+    const hitlMatrix = await this.hitlMatrixService.getMatrix(params.userId);
+    const autoApproveTools = this.hitlMatrixService.computeAutoApproveSet(
+      hitlMatrix,
+      this.toolRegistry.getAll()
+    );
+
+    const toolContext = this._buildToolContext(
+      params.userId,
+      AbortSignal.timeout(AGENT_TIMEOUT_MS),
+      params.rawJwt,
+      autoApproveTools
+    );
+
+    const langchainTools = this._buildLangChainTools(toolContext, records);
+    const agent = this._buildAgent(systemPrompt, langchainTools);
+
+    const runId = randomUUID();
+    const evalTags = params.evalCaseId ? ['eval', params.evalCaseId] : [];
+    const evalMeta = params.evalCaseId ? { evalCaseId: params.evalCaseId } : {};
+
+    const invokeInput = params.resumeCommand
+      ? new Command({ resume: params.resumeCommand })
+      : { messages: [new HumanMessage(params.message!)] };
+
+    const invokeConfig = params.resumeCommand
+      ? {
+          configurable: { thread_id: params.threadId },
+          callbacks: [tokenAccumulator],
+          runId,
+          runName: `resume:${params.conversationId.substring(0, 8)}`,
+          tags: ['agent', 'resume'],
+          metadata: {
+            userId: params.userId,
+            conversationId: params.conversationId,
+            actionId: params.actionId,
+            toolName: params.toolName,
+            ...evalMeta
+          }
+        }
+      : {
+          configurable: { thread_id: params.threadId },
+          callbacks: [tokenAccumulator],
+          runId,
+          runName: `chat:${params.conversationId.substring(0, 8)}`,
+          tags: ['agent', params.channel ?? 'default', ...evalTags],
+          metadata: {
+            userId: params.userId,
+            conversationId: params.conversationId,
+            channel: params.channel,
+            toolCount: langchainTools.length,
+            ...evalMeta
+          }
+        };
+
+    const agentResult = await agent.invoke(invokeInput, invokeConfig);
+
+    return { agentResult, records, tokenAccumulator, runId, requestStart };
+  }
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -296,69 +438,34 @@ export class AgentService implements OnModuleInit {
     rawJwt: string,
     evalCaseId?: string
   ): Promise<ChatResponse> {
-    const requestStart = Date.now();
-    const tokenAccumulator = new TokenAccumulator();
     const conversationId = request.conversationId ?? randomUUID();
     const threadId = `${userId}:${conversationId}`;
-
-    // LOCAL variable — never on `this` (cross-user data leak if class property)
-    const records: ToolCallRecord[] = [];
+    let runId: string | undefined;
+    let requestStart = Date.now();
+    let tokenAccumulator = new TokenAccumulator();
+    let records: ToolCallRecord[] = [];
 
     try {
-      const { currency, language, aiPromptContext } =
-        await this._loadUserContext(rawJwt);
-
-      const systemPrompt = buildSystemPrompt(
-        { userId, currency, language, aiPromptContext },
-        ALL_TOOLS,
-        request.channel
-      );
-
-      const hitlMatrix = await this.hitlMatrixService.getMatrix(userId);
-      const autoApproveTools = this.hitlMatrixService.computeAutoApproveSet(
-        hitlMatrix,
-        this.toolRegistry.getAll()
-      );
-
-      const abortSignal = AbortSignal.timeout(30000);
-      const toolContext: UserToolContext = {
+      const result = await this._runAgentRequest({
         userId,
-        abortSignal,
-        auth: { mode: 'user', jwt: rawJwt },
-        client: this.ghostfolioClient,
-        autoApproveTools
-      };
+        rawJwt,
+        conversationId,
+        threadId,
+        channel: request.channel,
+        message: request.message,
+        evalCaseId
+      });
 
-      const langchainTools = this._buildLangChainTools(toolContext, records);
-      const agent = this._buildAgent(systemPrompt, langchainTools);
-
-      const runId = randomUUID();
-      const evalTags = evalCaseId ? ['eval', evalCaseId] : [];
-      const evalMeta = evalCaseId ? { evalCaseId } : {};
-
-      const result = await agent.invoke(
-        { messages: [new HumanMessage(request.message)] },
-        {
-          configurable: { thread_id: threadId },
-          callbacks: [tokenAccumulator],
-          runId,
-          runName: `chat:${conversationId.substring(0, 8)}`,
-          tags: ['agent', request.channel ?? 'default', ...evalTags],
-          metadata: {
-            userId,
-            conversationId,
-            channel: request.channel,
-            toolCount: langchainTools.length,
-            ...evalMeta
-          }
-        }
-      );
+      runId = result.runId;
+      requestStart = result.requestStart;
+      tokenAccumulator = result.tokenAccumulator;
+      records = result.records;
 
       // Detect interrupt (HITL) — unique to chat()
-      if (isInterrupted(result)) {
-        const interruptPayload = (result as Record<string | symbol, unknown>)[
-          INTERRUPT
-        ] as
+      if (isInterrupted(result.agentResult)) {
+        const interruptPayload = (
+          result.agentResult as Record<string | symbol, unknown>
+        )[INTERRUPT] as
           | {
               value: {
                 toolName: string;
@@ -378,21 +485,21 @@ export class AgentService implements OnModuleInit {
             description: payload.description,
             status: 'pending',
             createdAt: new Date().toISOString(),
-            expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString()
+            expiresAt: new Date(Date.now() + HITL_EXPIRY_MS).toISOString()
           };
           await this.pendingActionsService.store(pendingAction, threadId);
 
-          this._persistMetrics(
+          this._persistMetrics({
             conversationId,
             userId,
             requestStart,
             tokenAccumulator,
             records,
-            [],
-            [],
-            request.channel,
-            runId
-          );
+            warnings: [],
+            flags: [],
+            channel: request.channel,
+            langsmithRunId: runId
+          });
 
           return {
             message: '',
@@ -405,7 +512,7 @@ export class AgentService implements OnModuleInit {
         }
       }
 
-      const agentResponse = this._extractLastMessage(result);
+      const agentResponse = this._extractLastMessage(result.agentResult);
       const chatResponse = await this._buildVerifiedResponse(
         agentResponse,
         records,
@@ -414,29 +521,31 @@ export class AgentService implements OnModuleInit {
         undefined,
         request.channel
       );
-      this._persistMetrics(
+      this._persistMetrics({
         conversationId,
         userId,
         requestStart,
         tokenAccumulator,
         records,
-        chatResponse.warnings,
-        chatResponse.flags,
-        request.channel,
-        runId
-      );
+        warnings: chatResponse.warnings,
+        flags: chatResponse.flags,
+        channel: request.channel,
+        langsmithRunId: runId
+      });
       return chatResponse;
     } catch (err) {
       this.logger.error(`chat() error for user ${userId}: ${err}`);
-      this._persistMetrics(
+      this._persistMetrics({
         conversationId,
         userId,
         requestStart,
         tokenAccumulator,
         records,
-        [],
-        []
-      );
+        warnings: [],
+        flags: [],
+        channel: request.channel,
+        langsmithRunId: runId
+      });
       return {
         message:
           'I encountered an error processing your request. Please try again.',
@@ -462,7 +571,6 @@ export class AgentService implements OnModuleInit {
 
     const { action, threadId } = stored;
 
-    // Verify the action belongs to the requesting user
     if (threadId.split(':')[0] !== userId) {
       throw new ForbiddenException('Action does not belong to this user');
     }
@@ -470,7 +578,6 @@ export class AgentService implements OnModuleInit {
     const conversationId = threadId.split(':').slice(1).join(':');
     const timestamp = new Date().toISOString();
 
-    // Rejected branch — unique to resume()
     if (!approved) {
       await this.pendingActionsService.updateStatus(actionId, 'rejected');
       await this.auditService.log({
@@ -481,15 +588,15 @@ export class AgentService implements OnModuleInit {
         params: action.proposedParams,
         timestamp
       });
-      this._persistMetrics(
+      this._persistMetrics({
         conversationId,
         userId,
-        Date.now(),
-        new TokenAccumulator(),
-        [],
-        [],
-        []
-      );
+        requestStart: Date.now(),
+        tokenAccumulator: new TokenAccumulator(),
+        records: [],
+        warnings: [],
+        flags: []
+      });
       return {
         message: 'Action cancelled.',
         conversationId,
@@ -500,7 +607,6 @@ export class AgentService implements OnModuleInit {
       };
     }
 
-    // Approved
     await this.pendingActionsService.updateStatus(actionId, 'approved');
     await this.auditService.log({
       id: randomUUID(),
@@ -511,85 +617,57 @@ export class AgentService implements OnModuleInit {
       timestamp
     });
 
-    // LOCAL variable — never on `this` (cross-user data leak if class property)
-    const requestStart = Date.now();
-    const tokenAccumulator = new TokenAccumulator();
-    const records: ToolCallRecord[] = [];
-
-    const hitlMatrix = await this.hitlMatrixService.getMatrix(userId);
-    const autoApproveTools = this.hitlMatrixService.computeAutoApproveSet(
-      hitlMatrix,
-      this.toolRegistry.getAll()
-    );
-
-    const abortSignal = AbortSignal.timeout(30000);
-    const toolContext: UserToolContext = {
-      userId,
-      abortSignal,
-      auth: { mode: 'user', jwt: rawJwt },
-      client: this.ghostfolioClient,
-      autoApproveTools
-    };
+    let runId: string | undefined;
+    let requestStart = Date.now();
+    let tokenAccumulator = new TokenAccumulator();
+    let records: ToolCallRecord[] = [];
 
     try {
-      const langchainTools = this._buildLangChainTools(toolContext, records);
-      const { currency, language, aiPromptContext } =
-        await this._loadUserContext(rawJwt);
-      const systemPrompt = buildSystemPrompt(
-        { userId, currency, language, aiPromptContext },
-        ALL_TOOLS
-      );
-      const agent = this._buildAgent(systemPrompt, langchainTools);
+      const result = await this._runAgentRequest({
+        userId,
+        rawJwt,
+        conversationId,
+        threadId,
+        resumeCommand: action.proposedParams,
+        actionId,
+        toolName: action.toolName
+      });
 
-      const runId = randomUUID();
+      runId = result.runId;
+      requestStart = result.requestStart;
+      tokenAccumulator = result.tokenAccumulator;
+      records = result.records;
 
-      const result = await agent.invoke(
-        new Command({ resume: action.proposedParams }),
-        {
-          configurable: { thread_id: threadId },
-          callbacks: [tokenAccumulator],
-          runId,
-          runName: `resume:${conversationId.substring(0, 8)}`,
-          tags: ['agent', 'resume'],
-          metadata: {
-            userId,
-            conversationId,
-            actionId,
-            toolName: action.toolName
-          }
-        }
-      );
-
-      const agentResponse = this._extractLastMessage(result);
+      const agentResponse = this._extractLastMessage(result.agentResult);
       const chatResponse = await this._buildVerifiedResponse(
         agentResponse,
         records,
         conversationId,
         userId
       );
-      this._persistMetrics(
+      this._persistMetrics({
         conversationId,
         userId,
         requestStart,
         tokenAccumulator,
         records,
-        chatResponse.warnings,
-        chatResponse.flags,
-        undefined,
-        runId
-      );
+        warnings: chatResponse.warnings,
+        flags: chatResponse.flags,
+        langsmithRunId: runId
+      });
       return chatResponse;
     } catch (err) {
       this.logger.error(`resume() error for user ${userId}: ${err}`);
-      this._persistMetrics(
+      this._persistMetrics({
         conversationId,
         userId,
         requestStart,
         tokenAccumulator,
         records,
-        [],
-        []
-      );
+        warnings: [],
+        flags: [],
+        langsmithRunId: runId
+      });
       return {
         message:
           'I encountered an error processing your request. Please try again.',

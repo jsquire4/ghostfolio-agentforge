@@ -9,10 +9,23 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 
+interface Migration {
+  version: number;
+  sql: string;
+}
+
 @Injectable()
 export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DatabaseService.name);
   private db: Database.Database;
+
+  private readonly MIGRATIONS: Migration[] = [
+    {
+      version: 1,
+      sql: `ALTER TABLE insights ADD COLUMN userId TEXT NOT NULL DEFAULT ''`
+    },
+    { version: 2, sql: `ALTER TABLE insights ADD COLUMN expires_at TEXT` }
+  ];
 
   public constructor(private readonly configService: ConfigService) {}
 
@@ -27,7 +40,23 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
 
-    this.db.exec(`
+    this._createTables(this.db);
+    this._runMigrations(this.db);
+    this._createIndexes(this.db);
+
+    this.logger.log(`SQLite connected: ${dbPath}`);
+  }
+
+  public onModuleDestroy(): void {
+    this.db?.close();
+  }
+
+  public getDb(): Database.Database {
+    return this.db;
+  }
+
+  private _createTables(db: Database.Database): void {
+    db.exec(`
       CREATE TABLE IF NOT EXISTS insights (
         id           TEXT PRIMARY KEY,
         category     TEXT NOT NULL,
@@ -37,22 +66,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    try {
-      this.db.exec(
-        `ALTER TABLE insights ADD COLUMN userId TEXT NOT NULL DEFAULT ''`
-      );
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '';
-      if (!msg.includes('duplicate column name')) throw e;
-    }
-    try {
-      this.db.exec(`ALTER TABLE insights ADD COLUMN expires_at TEXT`);
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '';
-      if (!msg.includes('duplicate column name')) throw e;
-    }
-
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS audit_log (
         id         TEXT PRIMARY KEY,
         userId     TEXT NOT NULL,
@@ -66,7 +80,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS feedback (
         id             TEXT PRIMARY KEY,
         userId         TEXT NOT NULL,
@@ -77,7 +91,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS request_metrics (
         id                   TEXT PRIMARY KEY,
         userId               TEXT NOT NULL,
@@ -97,23 +111,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    try {
-      this.db.exec(
-        `ALTER TABLE request_metrics ADD COLUMN langsmith_run_id TEXT`
-      );
-    } catch (e: unknown) {
-      const msg = e instanceof Error ? e.message : '';
-      if (!msg.includes('duplicate column name')) throw e;
-    }
-
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_request_metrics_userId ON request_metrics(userId)`
-    );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_request_metrics_requestedAt ON request_metrics(requestedAt)`
-    );
-
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS tool_metrics (
         id                TEXT PRIMARY KEY,
         requestMetricsId  TEXT NOT NULL,
@@ -126,27 +124,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_requestMetricsId ON tool_metrics(requestMetricsId)`
-    );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_toolName ON tool_metrics(toolName)`
-    );
-
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_audit_log_userId ON audit_log(userId)`
-    );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_feedback_userId ON feedback(userId)`
-    );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_insights_userId ON insights(userId)`
-    );
-    this.db.exec(
-      `CREATE INDEX IF NOT EXISTS idx_insights_generated_at ON insights(generated_at)`
-    );
-
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS eval_runs (
         id               TEXT PRIMARY KEY,
         gitSha           TEXT NOT NULL,
@@ -161,7 +139,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    this.db.exec(`
+    db.exec(`
       CREATE TABLE IF NOT EXISTS eval_case_results (
         id         TEXT PRIMARY KEY,
         runId      TEXT NOT NULL,
@@ -174,24 +152,68 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       )
     `);
 
-    this.db.exec(
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS schema_version (
+        version    INTEGER PRIMARY KEY,
+        applied_at TEXT NOT NULL
+      )
+    `);
+  }
+
+  private _runMigrations(db: Database.Database): void {
+    const maxRow = db
+      .prepare('SELECT MAX(version) as v FROM schema_version')
+      .get() as { v: number | null } | undefined;
+    const currentVersion = maxRow?.v ?? 0;
+
+    for (const migration of this.MIGRATIONS) {
+      if (migration.version <= currentVersion) continue;
+      try {
+        db.exec(migration.sql);
+      } catch (e: unknown) {
+        // Backward-compat: pre-version-table databases may already have the column
+        const msg = e instanceof Error ? e.message : '';
+        if (!msg.includes('duplicate column name')) throw e;
+      }
+      db.prepare(
+        'INSERT INTO schema_version (version, applied_at) VALUES (?, ?)'
+      ).run(migration.version, new Date().toISOString());
+    }
+  }
+
+  private _createIndexes(db: Database.Database): void {
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_request_metrics_userId ON request_metrics(userId)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_request_metrics_requestedAt ON request_metrics(requestedAt)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_requestMetricsId ON tool_metrics(requestMetricsId)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_toolName ON tool_metrics(toolName)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_audit_log_userId ON audit_log(userId)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_feedback_userId ON feedback(userId)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_insights_userId ON insights(userId)`
+    );
+    db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_insights_generated_at ON insights(generated_at)`
+    );
+    db.exec(
       `CREATE INDEX IF NOT EXISTS idx_eval_runs_runAt ON eval_runs(runAt)`
     );
-    this.db.exec(
+    db.exec(
       `CREATE INDEX IF NOT EXISTS idx_eval_case_results_runId ON eval_case_results(runId)`
     );
-    this.db.exec(
+    db.exec(
       `CREATE INDEX IF NOT EXISTS idx_eval_case_results_caseId ON eval_case_results(caseId)`
     );
-
-    this.logger.log(`SQLite connected: ${dbPath}`);
-  }
-
-  public onModuleDestroy(): void {
-    this.db?.close();
-  }
-
-  public getDb(): Database.Database {
-    return this.db;
   }
 }

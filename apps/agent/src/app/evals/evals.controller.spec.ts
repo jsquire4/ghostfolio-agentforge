@@ -1,24 +1,13 @@
 import { NotFoundException } from '@nestjs/common';
 
-import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
+import { makeEvalRunRecord } from '../../test-fixtures';
+import { EvalCaseResultRecord } from '../common/storage.types';
 import { EvalsRepository } from '../database/evals.repository';
 import { EvalsController } from './evals.controller';
 
 describe('EvalsController', () => {
   let controller: EvalsController;
   let mockRepo: jest.Mocked<EvalsRepository>;
-
-  const makeRun = (overrides?: Partial<EvalRunRecord>): EvalRunRecord => ({
-    id: 'run-1',
-    gitSha: 'abc123',
-    tier: 'golden',
-    totalPassed: 5,
-    totalFailed: 1,
-    passRate: 0.833,
-    totalDurationMs: 3000,
-    runAt: '2025-06-15T12:00:00.000Z',
-    ...overrides
-  });
 
   beforeEach(() => {
     mockRepo = {
@@ -40,7 +29,7 @@ describe('EvalsController', () => {
   });
 
   it('getResults returns recent runs from repo with defaults', () => {
-    const runs = [makeRun(), makeRun({ id: 'run-2' })];
+    const runs = [makeEvalRunRecord(), makeEvalRunRecord({ id: 'run-2' })];
     mockRepo.getRecentRuns.mockReturnValue(runs);
 
     const user = { userId: 'user-1', rawJwt: 'jwt' };
@@ -57,7 +46,7 @@ describe('EvalsController', () => {
   });
 
   it('getRunById returns run with cases', () => {
-    const run = makeRun();
+    const run = makeEvalRunRecord();
     const cases: EvalCaseResultRecord[] = [
       {
         id: 'c1',

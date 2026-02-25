@@ -2,9 +2,9 @@
 // Unified eval CLI — entry point for all eval tiers.
 //
 // Usage:
-//   npm run eval golden [--report]
-//   npm run eval labeled [--difficulty straightforward|ambiguous|edge] [--report]
-//   npm run eval all [--report]
+//   npm run eval golden [--tool <name>] [--report]
+//   npm run eval labeled [--difficulty straightforward|ambiguous|edge] [--tool <name>] [--cap N] [--report]
+//   npm run eval all [--tool <name>] [--cap N] [--report]
 //   npm run eval snapshot
 //   npm run eval coverage
 //   npm run eval rubric
@@ -21,6 +21,11 @@ import { getCaseResultsForRun, getLatestRun, persistEvalRun } from './persist';
 import { detectRegressions, RegressionReport } from './regression';
 import { writeHtmlReport, writeJsonReport } from './report';
 import { captureSnapshot, PortfolioSnapshot, printSnapshot } from './snapshot';
+import {
+  analyzeTierStaleness,
+  printTierStaleness,
+  TierStalenessReport
+} from './stale';
 import {
   EvalCaseResult,
   EvalCaseResultRecord,
@@ -229,14 +234,22 @@ function printSummary(suites: EvalSuiteResult[]): void {
 
 // ── Subcommands ─────────────────────────────────────────────
 
-async function cmdGolden(): Promise<EvalSuiteResult> {
-  const suite = await runGoldenEvals();
+async function cmdGolden(
+  tool?: string,
+  snapshot?: PortfolioSnapshot | null
+): Promise<EvalSuiteResult> {
+  const suite = await runGoldenEvals(tool, snapshot);
   printGoldenResults(suite);
   return suite;
 }
 
-async function cmdLabeled(difficulty?: string): Promise<EvalSuiteResult> {
-  const suite = await runLabeledEvals(difficulty);
+async function cmdLabeled(
+  difficulty?: string,
+  tool?: string,
+  cap?: number,
+  snapshot?: PortfolioSnapshot | null
+): Promise<EvalSuiteResult> {
+  const suite = await runLabeledEvals(difficulty, tool, cap, snapshot);
   printLabeledResults(suite);
   return suite;
 }
@@ -418,6 +431,14 @@ async function main(): Promise<void> {
   const diffIdx = args.indexOf('--difficulty');
   const difficulty =
     diffIdx !== -1 && args[diffIdx + 1] ? args[diffIdx + 1] : undefined;
+  const toolIdx = args.indexOf('--tool');
+  const tool =
+    toolIdx !== -1 && args[toolIdx + 1] ? args[toolIdx + 1] : undefined;
+  const capIdx = args.indexOf('--cap');
+  const cap =
+    capIdx !== -1 && args[capIdx + 1]
+      ? parseInt(args[capIdx + 1], 10)
+      : undefined;
   const wantsReport = args.includes('--report');
 
   // Non-eval commands
@@ -474,22 +495,22 @@ async function main(): Promise<void> {
 
   switch (command) {
     case 'golden': {
-      suites.push(await cmdGolden());
+      suites.push(await cmdGolden(tool, snapshot));
       break;
     }
     case 'labeled': {
-      suites.push(await cmdLabeled(difficulty));
+      suites.push(await cmdLabeled(difficulty, tool, cap, snapshot));
       break;
     }
     case 'all': {
-      suites.push(await cmdGolden());
-      suites.push(await cmdLabeled(difficulty));
+      suites.push(await cmdGolden(tool, snapshot));
+      suites.push(await cmdLabeled(difficulty, tool, cap, snapshot));
       break;
     }
     default: {
       console.error(
         `Unknown command: "${command}"\n` +
-          'Usage: npm run eval [golden|labeled|all|snapshot|coverage|rubric] [--difficulty ...] [--report]'
+          'Usage: npm run eval [golden|labeled|all|snapshot|coverage|rubric] [--difficulty ...] [--tool ...] [--cap N] [--report]'
       );
       process.exit(1);
     }
@@ -500,17 +521,45 @@ async function main(): Promise<void> {
   // Persist results and detect regressions
   const hasNewRegressions = persistAndDetectRegressions(suites);
 
+  // Staleness analysis — per tier, appended to reports
+  const dbPath = getDbPath();
+  const stalenessReports: TierStalenessReport[] = [];
+  const tiersRun = new Set(suites.map((s) => s.tier));
+  for (const tier of tiersRun) {
+    const sr = analyzeTierStaleness(dbPath, tier, 30, tool);
+    stalenessReports.push(sr);
+    const hasIssues =
+      sr.stale.length +
+        sr.dormant.length +
+        sr.flaky.length +
+        sr.orphaned.length >
+      0;
+    if (hasIssues) {
+      printTierStaleness(sr);
+    }
+  }
+
   // Portfolio snapshot (ground truth) — printed after evals so results show first
   if (snapshot) {
     printSnapshot(snapshot);
   }
 
-  // Export report files
+  // Export report files (staleness included)
   if (wantsReport && snapshot) {
     const outDir = resolve(process.cwd(), 'evals/reports');
     if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-    const jsonPath = writeJsonReport(snapshot, suites, outDir);
-    const htmlPath = writeHtmlReport(snapshot, suites, outDir);
+    const jsonPath = writeJsonReport(
+      snapshot,
+      suites,
+      outDir,
+      stalenessReports
+    );
+    const htmlPath = writeHtmlReport(
+      snapshot,
+      suites,
+      outDir,
+      stalenessReports
+    );
     console.log(`\n  ${GREEN}Reports:${RESET}`);
     console.log(`    JSON: ${jsonPath}`);
     console.log(`    HTML: ${htmlPath}`);

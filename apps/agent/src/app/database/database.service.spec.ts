@@ -26,37 +26,55 @@ describe('DatabaseService', () => {
     service.onModuleInit();
 
     const db = service.getDb();
-    const insights = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='insights'"
-      )
-      .get();
-    const audit = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='audit_log'"
-      )
-      .get();
-    const feedback = db
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name='feedback'"
-      )
-      .get();
+    const tables = (
+      db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as {
+        name: string;
+      }[]
+    ).map((r) => r.name);
 
-    expect(insights).toBeDefined();
-    expect(audit).toBeDefined();
-    expect(feedback).toBeDefined();
+    expect(tables).toContain('insights');
+    expect(tables).toContain('audit_log');
+    expect(tables).toContain('feedback');
+    expect(tables).toContain('request_metrics');
+    expect(tables).toContain('tool_metrics');
+    expect(tables).toContain('eval_runs');
+    expect(tables).toContain('eval_case_results');
+    expect(tables).toContain('schema_version');
 
     service.onModuleDestroy();
   });
 
-  it('handles duplicate ALTER TABLE gracefully (both userId and expires_at)', () => {
+  it('populates schema_version table after init', () => {
     const service = new DatabaseService(configService);
     service.onModuleInit();
+
+    const db = service.getDb();
+    const versions = db
+      .prepare('SELECT version FROM schema_version ORDER BY version')
+      .all() as { version: number }[];
+
+    expect(versions.length).toBeGreaterThanOrEqual(2);
+    expect(versions[0].version).toBe(1);
+    expect(versions[1].version).toBe(2);
+
+    service.onModuleDestroy();
+  });
+
+  it('idempotent re-run: double onModuleInit does not error', () => {
+    const service = new DatabaseService(configService);
+    service.onModuleInit();
+    service.onModuleDestroy();
 
     const service2 = new DatabaseService(configService);
     expect(() => service2.onModuleInit()).not.toThrow();
 
-    service.onModuleDestroy();
+    // Verify schema_version is not duplicated
+    const db = service2.getDb();
+    const versions = db
+      .prepare('SELECT version FROM schema_version ORDER BY version')
+      .all() as { version: number }[];
+    expect(versions).toHaveLength(2);
+
     service2.onModuleDestroy();
   });
 
@@ -88,8 +106,7 @@ describe('DatabaseService', () => {
   });
 
   it('re-throws ALTER TABLE error when not a duplicate-column error', () => {
-    // Pre-create "insights" as a VIEW — CREATE TABLE IF NOT EXISTS is a no-op for views,
-    // so ALTER TABLE then fails with a non-duplicate-column error (cannot alter a view).
+    // Pre-create "insights" as a VIEW — ALTER TABLE then fails with a non-duplicate error
     const dbPath = join(tmpDir, 'insights.db');
     const rawDb = new Database(dbPath);
     rawDb.exec(
@@ -101,19 +118,15 @@ describe('DatabaseService', () => {
     expect(() => service.onModuleInit()).toThrow();
   });
 
-  it('re-throws non-Error instance from ALTER TABLE userId catch', () => {
+  it('re-throws non-Error from migration execution', () => {
     const service = new DatabaseService(configService);
-    // Partially init: let CREATE TABLE succeed, then make ALTER throw a non-Error
     const origExec = Database.prototype.exec;
-    let callCount = 0;
     jest.spyOn(Database.prototype, 'exec').mockImplementation(function (
       this: Database.Database,
       sql: string
     ) {
-      callCount++;
-      // Call 1: CREATE TABLE insights — let through
-      // Call 2: ALTER TABLE userId — throw a string (non-Error)
-      if (callCount === 2) {
+      // Let table/index creation through; throw non-Error on migration ALTER
+      if (sql.includes('ALTER TABLE')) {
         throw 'non-error-string'; // eslint-disable-line no-throw-literal
       }
       return origExec.call(this, sql);
@@ -124,81 +137,33 @@ describe('DatabaseService', () => {
     service.onModuleDestroy();
   });
 
-  it('re-throws non-Error instance from ALTER TABLE expires_at catch', () => {
-    const service = new DatabaseService(configService);
-    const origExec = Database.prototype.exec;
-    let callCount = 0;
-    jest.spyOn(Database.prototype, 'exec').mockImplementation(function (
-      this: Database.Database,
-      sql: string
-    ) {
-      callCount++;
-      // Call 1: CREATE TABLE insights — let through
-      // Call 2: ALTER TABLE userId — let through
-      // Call 3: ALTER TABLE expires_at — throw a string (non-Error)
-      if (callCount === 3) {
-        throw 'non-error-string'; // eslint-disable-line no-throw-literal
-      }
-      return origExec.call(this, sql);
-    });
-
-    expect(() => service.onModuleInit()).toThrow();
-    jest.restoreAllMocks();
-    service.onModuleDestroy();
-  });
-
-  it('re-throws ALTER TABLE error for expires_at when not a duplicate-column error', () => {
-    // Create insights table WITH userId but make expires_at ALTER fail.
-    // Strategy: init normally (adds both columns), then drop and recreate
-    // the table with only userId, and add a column named "expires_at" with
-    // a UNIQUE constraint — then ALTER ADD expires_at will fail as duplicate.
-    // Actually we want a NON-duplicate failure, which can't happen with real SQLite
-    // for a simple ADD COLUMN. Use a read-only DB instead.
-
-    // Create a normal DB, init once to get the schema
-    const service = new DatabaseService(configService);
-    service.onModuleInit();
-    service.onModuleDestroy();
-
-    // Re-open and set the DB to read-only mode via file permissions
-    // This won't work easily cross-platform. Instead, test via spy on exec:
-    const service2 = new DatabaseService(configService);
-    service2.onModuleInit();
-
-    // Both columns exist from first init, so second init swallows both duplicates.
-    // To make the expires_at ALTER throw non-duplicate, drop the column (not possible
-    // in SQLite < 3.35). Instead, drop and recreate the whole table.
-    const db2 = service2.getDb();
-    db2.exec('DROP TABLE insights');
-    db2.exec(`
+  it('backward-compat: handles pre-version-table databases with existing columns', () => {
+    // Simulate a pre-migration database: create tables manually with columns already present
+    const dbPath = join(tmpDir, 'insights.db');
+    const rawDb = new Database(dbPath);
+    rawDb.exec(`
       CREATE TABLE insights (
         id TEXT PRIMARY KEY,
         category TEXT NOT NULL,
         summary TEXT NOT NULL,
         data TEXT NOT NULL,
         generated_at TEXT NOT NULL,
-        userId TEXT NOT NULL DEFAULT ''
+        userId TEXT NOT NULL DEFAULT '',
+        expires_at TEXT
       )
     `);
-    service2.onModuleDestroy();
+    rawDb.close();
 
-    // Now: insights table exists WITH userId but WITHOUT expires_at.
-    // Init will: CREATE TABLE (no-op), ALTER userId (duplicate → swallowed),
-    // ALTER expires_at (succeeds, not throws).
-    // We need expires_at ALTER to FAIL with non-duplicate. Since ALTER ADD COLUMN
-    // only fails with "duplicate column name" in SQLite, we make the table read-only
-    // by opening with readonly flag. But DatabaseService opens it read-write.
-    //
-    // Alternative: verify the symmetric catch block by checking that a fresh table
-    // correctly adds the expires_at column (branch: ALTER succeeds, no catch).
-    const service3 = new DatabaseService(configService);
-    service3.onModuleInit();
-    const db3 = service3.getDb();
-    const columns = db3.prepare("PRAGMA table_info('insights')").all() as {
-      name: string;
-    }[];
-    const hasExpiresAt = columns.some((c) => c.name === 'expires_at');
-    expect(hasExpiresAt).toBe(true);
-    service3.onModuleDestroy();
+    const service = new DatabaseService(configService);
+    expect(() => service.onModuleInit()).not.toThrow();
+
+    // Verify migrations were recorded despite columns already existing
+    const db = service.getDb();
+    const versions = db
+      .prepare('SELECT version FROM schema_version ORDER BY version')
+      .all() as { version: number }[];
+    expect(versions).toHaveLength(2);
+
+    service.onModuleDestroy();
   });
 });

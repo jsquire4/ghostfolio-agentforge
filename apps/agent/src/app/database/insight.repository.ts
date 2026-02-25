@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { InsightRecord } from '../common/interfaces';
+import { safeParseJson } from '../common/json.util';
 import { DatabaseService } from './database.service';
 
 @Injectable()
@@ -35,15 +36,7 @@ export class InsightRepository {
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data
-        ? (() => {
-            try {
-              return JSON.parse(row.data);
-            } catch {
-              return {};
-            }
-          })()
-        : undefined,
+      data: safeParseJson(row.data) as Record<string, unknown> | undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     }));
@@ -60,15 +53,7 @@ export class InsightRepository {
       userId: row.userId,
       category: row.category,
       summary: row.summary,
-      data: row.data
-        ? (() => {
-            try {
-              return JSON.parse(row.data);
-            } catch {
-              return {};
-            }
-          })()
-        : undefined,
+      data: safeParseJson(row.data) as Record<string, unknown> | undefined,
       createdAt: row.generated_at,
       expiresAt: row.expires_at ?? undefined
     };

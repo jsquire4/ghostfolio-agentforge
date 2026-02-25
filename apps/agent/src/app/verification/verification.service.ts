@@ -1,12 +1,20 @@
 import { Inject, Injectable, Logger, Optional } from '@nestjs/common';
-import { randomUUID } from 'crypto';
 
 import { ToolCallRecord } from '../common/interfaces';
 import type { Verifier } from '../common/interfaces';
-import { InsightRepository } from '../database/insight.repository';
 import { ALL_VERIFIERS } from './index';
 
 export const VERIFIERS_OVERRIDE = 'VERIFIERS_OVERRIDE';
+
+export interface VerificationPipelineResult {
+  warnings: string[];
+  flags: string[];
+  insightData?: {
+    category: string;
+    summary: string;
+    data: Record<string, unknown>;
+  };
+}
 
 @Injectable()
 export class VerificationService {
@@ -14,7 +22,6 @@ export class VerificationService {
   private readonly verifiers: Verifier[];
 
   constructor(
-    private readonly insightRepository: InsightRepository,
     @Optional() @Inject(VERIFIERS_OVERRIDE) verifiersOverride?: Verifier[]
   ) {
     const source = verifiersOverride ?? ALL_VERIFIERS;
@@ -36,9 +43,9 @@ export class VerificationService {
   async runAll(
     response: string,
     toolCalls: ToolCallRecord[],
-    userId: string,
+    _userId: string,
     channel?: string
-  ): Promise<{ warnings: string[]; flags: string[] }> {
+  ): Promise<VerificationPipelineResult> {
     const allWarnings: string[] = [];
     const allFlags: string[] = [];
 
@@ -56,27 +63,24 @@ export class VerificationService {
       }
     }
 
-    // Persist significant findings as InsightRecords
+    const result: VerificationPipelineResult = {
+      warnings: allWarnings,
+      flags: allFlags
+    };
+
+    // Return insight data for the caller to persist (if significant findings)
     if (allWarnings.length > 0 || allFlags.length > 0) {
-      try {
-        this.insightRepository.insert({
-          id: randomUUID(),
-          userId,
-          category: 'verification',
-          summary: allWarnings.concat(allFlags).join('; '),
-          data: {
-            warnings: allWarnings,
-            flags: allFlags,
-            verifierCount: this.verifiers.length
-          },
-          createdAt: new Date().toISOString()
-        });
-      } catch (error) {
-        const msg = error instanceof Error ? error.message : String(error);
-        this.logger.error(`Failed to persist insight record: ${msg}`);
-      }
+      result.insightData = {
+        category: 'verification',
+        summary: allWarnings.concat(allFlags).join('; '),
+        data: {
+          warnings: allWarnings,
+          flags: allFlags,
+          verifierCount: this.verifiers.length
+        }
+      };
     }
 
-    return { warnings: allWarnings, flags: allFlags };
+    return result;
   }
 }

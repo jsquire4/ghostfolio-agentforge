@@ -81,21 +81,8 @@ export class GhostfolioClientService implements IGhostfolioClient {
 
     const response = await fetch(url, options);
     if (!response.ok) {
-      // If service auth got a 401, clear cached JWT and retry once
       if (response.status === 401 && auth.mode === 'service') {
-        this.cachedServiceJwt = null;
-        this.serviceJwtExpiresAt = 0;
-        const retryJwt = await this.getServiceJwt();
-        headers['Authorization'] = `Bearer ${retryJwt}`;
-        const retryResponse = await fetch(url, { ...options, headers });
-        if (!retryResponse.ok) {
-          throw new GhostfolioClientError(
-            retryResponse.status,
-            await retryResponse.text(),
-            path
-          );
-        }
-        return retryResponse.json() as Promise<T>;
+        return this._retryWithFreshServiceJwt<T>(url, options, headers, path);
       }
       throw new GhostfolioClientError(
         response.status,
@@ -104,6 +91,27 @@ export class GhostfolioClientService implements IGhostfolioClient {
       );
     }
     return response.json() as Promise<T>;
+  }
+
+  private async _retryWithFreshServiceJwt<T>(
+    url: string,
+    options: RequestInit,
+    headers: Record<string, string>,
+    path: string
+  ): Promise<T> {
+    this.cachedServiceJwt = null;
+    this.serviceJwtExpiresAt = 0;
+    const retryJwt = await this.getServiceJwt();
+    headers['Authorization'] = `Bearer ${retryJwt}`;
+    const retryResponse = await fetch(url, { ...options, headers });
+    if (!retryResponse.ok) {
+      throw new GhostfolioClientError(
+        retryResponse.status,
+        await retryResponse.text(),
+        path
+      );
+    }
+    return retryResponse.json() as Promise<T>;
   }
 
   private async getServiceJwt(): Promise<string> {

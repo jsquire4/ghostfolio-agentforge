@@ -3,6 +3,8 @@ import { readdirSync, readFileSync } from 'fs';
 import { sign } from 'jsonwebtoken';
 import { join, resolve } from 'path';
 
+import { PortfolioSnapshot } from './snapshot';
+import { resolveArray } from './snapshot-resolver';
 import {
   ChatResponseShape,
   EvalCaseResult,
@@ -14,10 +16,15 @@ const LABELED_DIR = resolve(__dirname, 'dataset/labeled');
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8000';
 const COST_PER_TOKEN = 0.000003; // rough estimate for GPT-4o-mini
 
-function loadLabeledCases(difficulty?: string): LabeledEvalCase[] {
-  const files = readdirSync(LABELED_DIR).filter((f) =>
-    f.endsWith('.eval.json')
-  );
+function loadLabeledCases(
+  difficulty?: string,
+  tool?: string
+): LabeledEvalCase[] {
+  let files = readdirSync(LABELED_DIR).filter((f) => f.endsWith('.eval.json'));
+  if (tool) {
+    const kebab = tool.replace(/_/g, '-');
+    files = files.filter((f) => f === `${kebab}.eval.json`);
+  }
   const cases: LabeledEvalCase[] = [];
   for (const file of files) {
     const content = readFileSync(join(LABELED_DIR, file), 'utf-8');
@@ -28,6 +35,17 @@ function loadLabeledCases(difficulty?: string): LabeledEvalCase[] {
     return cases.filter((c) => c.difficulty === difficulty);
   }
   return cases;
+}
+
+function sampleCases(cases: LabeledEvalCase[], cap: number): LabeledEvalCase[] {
+  if (cases.length <= cap) return cases;
+  // Fisher-Yates shuffle then take first `cap`
+  const shuffled = [...cases];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, cap);
 }
 
 async function getJwt(): Promise<string> {
@@ -132,7 +150,8 @@ function estimateTokens(text: string): number {
 function assertCase(
   evalCase: LabeledEvalCase,
   response: ChatResponseShape,
-  latencyMs: number
+  latencyMs: number,
+  snapshot: PortfolioSnapshot | null
 ): string[] {
   const errors: string[] = [];
   const calledTools = response.toolCalls.map((tc) => tc.toolName);
@@ -154,7 +173,7 @@ function assertCase(
       if (acceptable.length === 1 && acceptable[0] === '__none__') {
         return calledTools.length === 0;
       }
-      return acceptable.every((tool) => calledTools.includes(tool));
+      return acceptable.every((t) => calledTools.includes(t));
     });
     if (!matched) {
       errors.push(
@@ -188,32 +207,42 @@ function assertCase(
     errors.push('Expected non-empty response but got empty');
   }
 
-  // responseContains
+  // responseContains — resolve {{snapshot:*}} templates
   if (evalCase.expect.responseContains) {
-    for (const substr of evalCase.expect.responseContains) {
+    const { resolved, warnings } = resolveArray(
+      evalCase.expect.responseContains,
+      snapshot
+    );
+    for (const w of warnings) errors.push(w);
+    for (const substr of resolved) {
       if (!response.message.includes(substr)) {
         errors.push(`Response missing expected substring: "${substr}"`);
       }
     }
   }
 
-  // responseContainsAny — at least one from each synonym group
+  // responseContainsAny — resolve templates in each synonym group
   if (evalCase.expect.responseContainsAny) {
     for (const group of evalCase.expect.responseContainsAny) {
-      const found = group.some((synonym) =>
+      const { resolved } = resolveArray(group, snapshot);
+      const found = resolved.some((synonym) =>
         response.message.toLowerCase().includes(synonym.toLowerCase())
       );
       if (!found) {
         errors.push(
-          `Response missing any of synonym group: [${group.join(', ')}]`
+          `Response missing any of synonym group: [${resolved.join(', ')}]`
         );
       }
     }
   }
 
-  // responseNotContains
+  // responseNotContains — resolve templates
   if (evalCase.expect.responseNotContains) {
-    for (const substr of evalCase.expect.responseNotContains) {
+    const { resolved } = resolveArray(
+      evalCase.expect.responseNotContains,
+      snapshot
+    );
+    for (const substr of resolved) {
       if (response.message.toLowerCase().includes(substr.toLowerCase())) {
         errors.push(`Response contains forbidden substring: "${substr}"`);
       }
@@ -262,11 +291,20 @@ function assertCase(
 }
 
 export async function runLabeledEvals(
-  difficulty?: string
+  difficulty?: string,
+  tool?: string,
+  cap?: number,
+  snapshot?: PortfolioSnapshot | null
 ): Promise<EvalSuiteResult> {
   await healthCheck();
   const jwt = await getJwt();
-  const cases = loadLabeledCases(difficulty);
+  let cases = loadLabeledCases(difficulty, tool);
+  if (cap && cases.length > cap) {
+    console.log(
+      `  Sampling ${cap} of ${cases.length} labeled cases (--cap ${cap})`
+    );
+    cases = sampleCases(cases, cap);
+  }
   const results: EvalCaseResult[] = [];
   let totalCost = 0;
 
@@ -280,7 +318,12 @@ export async function runLabeledEvals(
         evalCase.id
       );
 
-      const errors = assertCase(evalCase, response, latencyMs);
+      const errors = assertCase(
+        evalCase,
+        response,
+        latencyMs,
+        snapshot ?? null
+      );
       const tokens = estimateTokens(response.message);
       const cost = tokens * COST_PER_TOKEN;
       totalCost += cost;

@@ -1,4 +1,11 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import {
+  Controller,
+  DefaultValuePipe,
+  Get,
+  Param,
+  ParseIntPipe,
+  Query
+} from '@nestjs/common';
 
 import { AuthUser } from '../common/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
@@ -23,16 +30,10 @@ export class MetricsController {
   @Get()
   public getMetrics(
     @CurrentUser() user: AuthUser,
-    @Query('limit') limit?: string,
-    @Query('offset') offset?: string
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
+    @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number
   ): RequestMetrics[] {
-    const parsedLimit = limit ? parseInt(limit, 10) : 50;
-    const parsedOffset = offset ? parseInt(offset, 10) : 0;
-    return this.metricsRepository.getByUser(
-      user.userId,
-      isNaN(parsedLimit) ? 50 : parsedLimit,
-      isNaN(parsedOffset) ? 0 : parsedOffset
-    );
+    return this.metricsRepository.getByUser(user.userId, limit, offset);
   }
 
   @Get('summary')
@@ -53,12 +54,8 @@ export class MetricsController {
   @Get('tools/:toolName')
   public getToolPerformance(
     @Param('toolName') toolName: string,
-    @Query('limit') limit?: string
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number
   ): ToolMetricsRecord[] {
-    const parsedLimit = limit ? parseInt(limit, 10) : 50;
-    return this.toolMetricsRepository.getToolPerformance(
-      toolName,
-      isNaN(parsedLimit) ? 50 : parsedLimit
-    );
+    return this.toolMetricsRepository.getToolPerformance(toolName, limit);
   }
 }

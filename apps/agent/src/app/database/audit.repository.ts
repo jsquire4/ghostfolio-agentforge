@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { AuditEntry } from '../common/interfaces';
+import { safeParseJson } from '../common/json.util';
 import { DatabaseService } from './database.service';
 
 @Injectable()
@@ -37,27 +38,13 @@ export class AuditRepository {
       userId: row.userId,
       action: row.action,
       toolName: row.toolName ?? undefined,
-      params: row.params
-        ? (() => {
-            try {
-              return JSON.parse(row.params);
-            } catch {
-              return {};
-            }
-          })()
-        : undefined,
+      params: safeParseJson(row.params) as Record<string, unknown> | undefined,
       result: row.result ?? undefined,
       timestamp: row.timestamp,
       durationMs: row.durationMs ?? undefined,
-      metadata: row.metadata
-        ? (() => {
-            try {
-              return JSON.parse(row.metadata);
-            } catch {
-              return {};
-            }
-          })()
-        : undefined
+      metadata: safeParseJson(row.metadata) as
+        | Record<string, unknown>
+        | undefined
     }));
   }
 }

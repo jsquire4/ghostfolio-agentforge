@@ -48,6 +48,7 @@
     "eval:golden": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/cli.ts golden",
     "eval:labeled": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/cli.ts labeled",
     "eval:coverage": "npx ts-node --project evals/tsconfig.eval.json evals/check-coverage.ts",
+    "eval:stale": "npx dotenv-cli -e .env -- npx ts-node --project evals/tsconfig.eval.json evals/stale.ts",
     "eval:setup": "./scripts/check-setup.sh",
     "eval:seed": "./scripts/seed-eval-user.sh",
     "setup": "./scripts/setup.sh",

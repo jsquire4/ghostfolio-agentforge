@@ -3,6 +3,8 @@ import { readdirSync, readFileSync } from 'fs';
 import { sign } from 'jsonwebtoken';
 import { join, resolve } from 'path';
 
+import { PortfolioSnapshot } from './snapshot';
+import { resolveArray } from './snapshot-resolver';
 import {
   ChatResponseShape,
   EvalCaseResult,
@@ -14,8 +16,12 @@ const GOLDEN_DIR = resolve(__dirname, 'dataset/golden');
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8000';
 const COST_PER_TOKEN = 0.000003; // rough estimate for GPT-4o-mini
 
-function loadGoldenCases(): GoldenEvalCase[] {
-  const files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith('.eval.json'));
+function loadGoldenCases(tool?: string): GoldenEvalCase[] {
+  let files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith('.eval.json'));
+  if (tool) {
+    const kebab = tool.replace(/_/g, '-');
+    files = files.filter((f) => f === `${kebab}.eval.json`);
+  }
   const cases: GoldenEvalCase[] = [];
   for (const file of files) {
     const content = readFileSync(join(GOLDEN_DIR, file), 'utf-8');
@@ -148,7 +154,8 @@ function buildCriteria(evalCase: GoldenEvalCase): string[] {
 function assertCase(
   evalCase: GoldenEvalCase,
   response: ChatResponseShape,
-  latencyMs: number
+  latencyMs: number,
+  snapshot: PortfolioSnapshot | null
 ): string[] {
   const errors: string[] = [];
   const calledTools = response.toolCalls.map((tc) => tc.toolName);
@@ -177,32 +184,42 @@ function assertCase(
     errors.push('Expected non-empty response but got empty');
   }
 
-  // responseContains
+  // responseContains — resolve {{snapshot:*}} templates before comparison
   if (evalCase.expect.responseContains) {
-    for (const substr of evalCase.expect.responseContains) {
+    const { resolved, warnings } = resolveArray(
+      evalCase.expect.responseContains,
+      snapshot
+    );
+    for (const w of warnings) errors.push(w);
+    for (const substr of resolved) {
       if (!response.message.includes(substr)) {
         errors.push(`Response missing expected substring: "${substr}"`);
       }
     }
   }
 
-  // responseContainsAny — at least one from each synonym group
+  // responseContainsAny — resolve templates in each synonym group
   if (evalCase.expect.responseContainsAny) {
     for (const group of evalCase.expect.responseContainsAny) {
-      const found = group.some((synonym) =>
+      const { resolved } = resolveArray(group, snapshot);
+      const found = resolved.some((synonym) =>
         response.message.toLowerCase().includes(synonym.toLowerCase())
       );
       if (!found) {
         errors.push(
-          `Response missing any of synonym group: [${group.join(', ')}]`
+          `Response missing any of synonym group: [${resolved.join(', ')}]`
         );
       }
     }
   }
 
-  // responseNotContains
+  // responseNotContains — resolve templates before comparison
   if (evalCase.expect.responseNotContains) {
-    for (const substr of evalCase.expect.responseNotContains) {
+    const { resolved } = resolveArray(
+      evalCase.expect.responseNotContains,
+      snapshot
+    );
+    for (const substr of resolved) {
       if (response.message.toLowerCase().includes(substr.toLowerCase())) {
         errors.push(`Response contains forbidden substring: "${substr}"`);
       }
@@ -222,10 +239,13 @@ function assertCase(
   return errors;
 }
 
-export async function runGoldenEvals(): Promise<EvalSuiteResult> {
+export async function runGoldenEvals(
+  tool?: string,
+  snapshot?: PortfolioSnapshot | null
+): Promise<EvalSuiteResult> {
   await healthCheck();
   const jwt = await getJwt();
-  const cases = loadGoldenCases();
+  const cases = loadGoldenCases(tool);
   const results: EvalCaseResult[] = [];
   let totalCost = 0;
 
@@ -240,7 +260,12 @@ export async function runGoldenEvals(): Promise<EvalSuiteResult> {
         jwt
       );
 
-      const errors = assertCase(evalCase, response, latencyMs);
+      const errors = assertCase(
+        evalCase,
+        response,
+        latencyMs,
+        snapshot ?? null
+      );
       const tokens = estimateTokens(response.message);
       const cost = tokens * COST_PER_TOKEN;
       totalCost += cost;

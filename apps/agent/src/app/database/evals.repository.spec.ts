@@ -3,7 +3,10 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
+import {
+  makeEvalRunRecord,
+  makeEvalCaseResultRecord
+} from '../../test-fixtures';
 import { DatabaseService } from './database.service';
 import { EvalsRepository } from './evals.repository';
 
@@ -11,29 +14,6 @@ describe('EvalsRepository', () => {
   let dbService: DatabaseService;
   let repo: EvalsRepository;
   let tmpDir: string;
-
-  const makeRun = (overrides?: Partial<EvalRunRecord>): EvalRunRecord => ({
-    id: 'run-1',
-    gitSha: 'abc123',
-    tier: 'golden',
-    totalPassed: 5,
-    totalFailed: 1,
-    passRate: 0.833,
-    totalDurationMs: 3000,
-    runAt: '2025-06-15T12:00:00.000Z',
-    ...overrides
-  });
-
-  const makeCase = (
-    overrides?: Partial<EvalCaseResultRecord>
-  ): EvalCaseResultRecord => ({
-    id: 'case-1',
-    runId: 'run-1',
-    caseId: 'gs-001',
-    passed: true,
-    durationMs: 500,
-    ...overrides
-  });
 
   beforeEach(() => {
     tmpDir = mkdtempSync(join(tmpdir(), 'evals-repo-test-'));
@@ -51,7 +31,7 @@ describe('EvalsRepository', () => {
   });
 
   it('inserts and retrieves a run', () => {
-    const run = makeRun();
+    const run = makeEvalRunRecord();
     repo.insertRun(run);
     const runs = repo.getRecentRuns();
     expect(runs).toHaveLength(1);
@@ -60,10 +40,15 @@ describe('EvalsRepository', () => {
   });
 
   it('inserts and retrieves case results', () => {
-    repo.insertRun(makeRun());
+    repo.insertRun(makeEvalRunRecord());
     repo.insertCaseResults([
-      makeCase({ id: 'c1', caseId: 'gs-001', passed: true }),
-      makeCase({ id: 'c2', caseId: 'gs-002', passed: false, error: 'timeout' })
+      makeEvalCaseResultRecord({ id: 'c1', caseId: 'gs-001', passed: true }),
+      makeEvalCaseResultRecord({
+        id: 'c2',
+        caseId: 'gs-002',
+        passed: false,
+        error: 'timeout'
+      })
     ]);
 
     const result = repo.getRunById('run-1');
@@ -75,9 +60,9 @@ describe('EvalsRepository', () => {
   });
 
   it('stores and retrieves details as JSON', () => {
-    repo.insertRun(makeRun());
+    repo.insertRun(makeEvalRunRecord());
     const details = { prompt: 'test', tokens: 42 };
-    repo.insertCaseResults([makeCase({ details })]);
+    repo.insertCaseResults([makeEvalCaseResultRecord({ details })]);
 
     const result = repo.getRunById('run-1');
     expect(result!.cases[0].details).toEqual(details);
@@ -90,7 +75,7 @@ describe('EvalsRepository', () => {
   it('getRecentRuns respects limit and offset', () => {
     for (let i = 0; i < 5; i++) {
       repo.insertRun(
-        makeRun({
+        makeEvalRunRecord({
           id: `run-${i}`,
           runAt: `2025-06-15T12:0${i}:00.000Z`
         })
@@ -103,13 +88,25 @@ describe('EvalsRepository', () => {
 
   it('getLatestRun returns most recent for tier', () => {
     repo.insertRun(
-      makeRun({ id: 'r1', tier: 'golden', runAt: '2025-06-15T12:00:00.000Z' })
+      makeEvalRunRecord({
+        id: 'r1',
+        tier: 'golden',
+        runAt: '2025-06-15T12:00:00.000Z'
+      })
     );
     repo.insertRun(
-      makeRun({ id: 'r2', tier: 'golden', runAt: '2025-06-15T13:00:00.000Z' })
+      makeEvalRunRecord({
+        id: 'r2',
+        tier: 'golden',
+        runAt: '2025-06-15T13:00:00.000Z'
+      })
     );
     repo.insertRun(
-      makeRun({ id: 'r3', tier: 'labeled', runAt: '2025-06-15T14:00:00.000Z' })
+      makeEvalRunRecord({
+        id: 'r3',
+        tier: 'labeled',
+        runAt: '2025-06-15T14:00:00.000Z'
+      })
     );
 
     const latest = repo.getLatestRun('golden');
@@ -122,11 +119,25 @@ describe('EvalsRepository', () => {
   });
 
   it('getCaseHistory returns results across runs', () => {
-    repo.insertRun(makeRun({ id: 'r1', runAt: '2025-06-15T12:00:00.000Z' }));
-    repo.insertRun(makeRun({ id: 'r2', runAt: '2025-06-15T13:00:00.000Z' }));
+    repo.insertRun(
+      makeEvalRunRecord({ id: 'r1', runAt: '2025-06-15T12:00:00.000Z' })
+    );
+    repo.insertRun(
+      makeEvalRunRecord({ id: 'r2', runAt: '2025-06-15T13:00:00.000Z' })
+    );
     repo.insertCaseResults([
-      makeCase({ id: 'c1', runId: 'r1', caseId: 'gs-001', durationMs: 400 }),
-      makeCase({ id: 'c2', runId: 'r2', caseId: 'gs-001', durationMs: 600 })
+      makeEvalCaseResultRecord({
+        id: 'c1',
+        runId: 'r1',
+        caseId: 'gs-001',
+        durationMs: 400
+      }),
+      makeEvalCaseResultRecord({
+        id: 'c2',
+        runId: 'r2',
+        caseId: 'gs-001',
+        durationMs: 600
+      })
     ]);
 
     const history = repo.getCaseHistory('gs-001');
@@ -137,21 +148,23 @@ describe('EvalsRepository', () => {
   });
 
   it('handles optional model and estimatedCost', () => {
-    repo.insertRun(makeRun({ model: 'gpt-4o-mini', estimatedCost: 0.05 }));
+    repo.insertRun(
+      makeEvalRunRecord({ model: 'gpt-4o-mini', estimatedCost: 0.05 })
+    );
     const runs = repo.getRecentRuns();
     expect(runs[0].model).toBe('gpt-4o-mini');
     expect(runs[0].estimatedCost).toBeCloseTo(0.05, 3);
   });
 
   it('handles missing optional fields as undefined', () => {
-    repo.insertRun(makeRun());
+    repo.insertRun(makeEvalRunRecord());
     const runs = repo.getRecentRuns();
     expect(runs[0].model).toBeUndefined();
     expect(runs[0].estimatedCost).toBeUndefined();
   });
 
   it('insertCaseResults with empty array does not throw', () => {
-    repo.insertRun(makeRun());
+    repo.insertRun(makeEvalRunRecord());
     expect(() => repo.insertCaseResults([])).not.toThrow();
     const result = repo.getRunById('run-1');
     expect(result!.cases).toHaveLength(0);
@@ -160,10 +173,17 @@ describe('EvalsRepository', () => {
   it('getCaseHistory respects limit parameter', () => {
     for (let i = 0; i < 5; i++) {
       repo.insertRun(
-        makeRun({ id: `r-${i}`, runAt: `2025-06-15T12:0${i}:00.000Z` })
+        makeEvalRunRecord({
+          id: `r-${i}`,
+          runAt: `2025-06-15T12:0${i}:00.000Z`
+        })
       );
       repo.insertCaseResults([
-        makeCase({ id: `c-${i}`, runId: `r-${i}`, caseId: 'gs-001' })
+        makeEvalCaseResultRecord({
+          id: `c-${i}`,
+          runId: `r-${i}`,
+          caseId: 'gs-001'
+        })
       ]);
     }
     const history = repo.getCaseHistory('gs-001', 3);

@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
+import { makeInsight } from '../../test-fixtures';
 import { DatabaseService } from './database.service';
 import { InsightRepository } from './insight.repository';
 
@@ -27,15 +28,7 @@ describe('InsightRepository', () => {
   });
 
   it('inserts and retrieves by user', () => {
-    repo.insert({
-      id: 'ins-1',
-      userId: 'user-1',
-      category: 'verification',
-      summary: 'Test summary',
-      data: { key: 'value' },
-      createdAt: '2025-01-01T00:00:00.000Z',
-      expiresAt: '2025-01-02T00:00:00.000Z'
-    });
+    repo.insert(makeInsight({ expiresAt: '2025-01-02T00:00:00.000Z' }));
 
     const results = repo.getByUser('user-1');
     expect(results).toHaveLength(1);
@@ -46,14 +39,14 @@ describe('InsightRepository', () => {
 
   it('getByUser respects limit and offset', () => {
     for (let i = 0; i < 5; i++) {
-      repo.insert({
-        id: `ins-${i}`,
-        userId: 'user-1',
-        category: 'test',
-        summary: `Summary ${i}`,
-        data: {},
-        createdAt: `2025-01-0${i + 1}T00:00:00.000Z`
-      });
+      repo.insert(
+        makeInsight({
+          id: `ins-${i}`,
+          summary: `Summary ${i}`,
+          data: {},
+          createdAt: `2025-01-0${i + 1}T00:00:00.000Z`
+        })
+      );
     }
 
     const page1 = repo.getByUser('user-1', 2, 0);
@@ -68,14 +61,7 @@ describe('InsightRepository', () => {
   });
 
   it('getById returns record when present', () => {
-    repo.insert({
-      id: 'ins-by-id',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'Summary',
-      data: { nested: true },
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
+    repo.insert(makeInsight({ id: 'ins-by-id', data: { nested: true } }));
 
     const found = repo.getById('ins-by-id');
     expect(found).toBeDefined();
@@ -123,100 +109,69 @@ describe('InsightRepository', () => {
   });
 
   it('insert uses empty object when data is undefined', () => {
-    repo.insert({
-      id: 'no-data',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'No data',
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
+    repo.insert(
+      makeInsight({ id: 'no-data', summary: 'No data', data: undefined })
+    );
 
     const found = repo.getById('no-data');
     expect(found).toBeDefined();
     expect(found?.summary).toBe('No data');
+    expect(found?.data).toEqual({});
   });
 
   it('insert handles null expiresAt', () => {
-    repo.insert({
-      id: 'no-expiry',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'No expiry',
-      data: {},
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
+    repo.insert(makeInsight({ id: 'no-expiry', summary: 'No expiry' }));
 
     const found = repo.getById('no-expiry');
     expect(found?.expiresAt).toBeUndefined();
   });
 
   it('isolates records by user', () => {
-    repo.insert({
-      id: 'ins-u1',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'User 1',
-      data: {},
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
-    repo.insert({
-      id: 'ins-u2',
-      userId: 'user-2',
-      category: 'test',
-      summary: 'User 2',
-      data: {},
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
+    repo.insert(
+      makeInsight({
+        id: 'ins-u1',
+        userId: 'user-1',
+        summary: 'User 1',
+        data: {}
+      })
+    );
+    repo.insert(
+      makeInsight({
+        id: 'ins-u2',
+        userId: 'user-2',
+        summary: 'User 2',
+        data: {}
+      })
+    );
 
     expect(repo.getByUser('user-1')).toHaveLength(1);
     expect(repo.getByUser('user-2')).toHaveLength(1);
     expect(repo.getByUser('user-1')[0].id).toBe('ins-u1');
   });
 
-  it('returns empty object for data when inserted with undefined data', () => {
-    repo.insert({
-      id: 'no-data-check',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'No data',
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
-
-    const found = repo.getById('no-data-check');
-    expect(found).toBeDefined();
-    expect(found?.data).toEqual({});
-  });
-
   it('returns empty array when offset is beyond total records', () => {
-    repo.insert({
-      id: 'ins-only',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'Only one',
-      data: {},
-      createdAt: '2025-01-01T00:00:00.000Z'
-    });
+    repo.insert(makeInsight({ id: 'ins-only', summary: 'Only one', data: {} }));
 
     const results = repo.getByUser('user-1', 10, 100);
     expect(results).toEqual([]);
   });
 
   it('getById returns expiresAt when set', () => {
-    repo.insert({
-      id: 'with-expiry',
-      userId: 'user-1',
-      category: 'test',
-      summary: 'Has expiry',
-      data: { ok: true },
-      createdAt: '2025-01-01T00:00:00.000Z',
-      expiresAt: '2025-06-01T00:00:00.000Z'
-    });
+    repo.insert(
+      makeInsight({
+        id: 'with-expiry',
+        data: { ok: true },
+        expiresAt: '2025-06-01T00:00:00.000Z'
+      })
+    );
 
     const found = repo.getById('with-expiry');
     expect(found?.expiresAt).toBe('2025-06-01T00:00:00.000Z');
   });
 
-  it('getByUser returns undefined data when row.data is NULL', () => {
+  // Empty string → undefined (falsy input), vs malformed JSON → {} (parse fallback).
+  // This asymmetry is intentional: empty means "no data stored", malformed means "data was stored but corrupted".
+  it('handles NULL/empty data in both getByUser and getById', () => {
     const db = dbService.getDb();
     db.prepare(
       `INSERT INTO insights (id, userId, category, summary, data, generated_at, expires_at)
@@ -234,24 +189,8 @@ describe('InsightRepository', () => {
     const results = repo.getByUser('user-null');
     expect(results).toHaveLength(1);
     expect(results[0].data).toBeUndefined();
-  });
 
-  it('getById returns undefined data when row.data is NULL', () => {
-    const db = dbService.getDb();
-    db.prepare(
-      `INSERT INTO insights (id, userId, category, summary, data, generated_at, expires_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`
-    ).run(
-      'null-data-2',
-      'user-null',
-      'test',
-      'Summary',
-      '',
-      '2025-01-01T00:00:00.000Z',
-      null
-    );
-
-    const found = repo.getById('null-data-2');
+    const found = repo.getById('null-data-1');
     expect(found).toBeDefined();
     expect(found?.data).toBeUndefined();
   });

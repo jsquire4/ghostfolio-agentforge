@@ -394,6 +394,87 @@ Assertions use three fields to enforce accuracy, precision, and flexibility:
 2. **Domain precision terms (correct language)** — The response must use appropriate financial vocabulary. If the user asks about dividends, acceptable terms are "dividend", "distribution", "payout" — NOT "money you got" or "payment." Define synonym groups in `responseContainsAny`.
 3. **Structural relevance** — The response answers what was asked. Enforced by combining `responseContains` (proves data was fetched) with `responseContainsAny` (proves correct framing) and `responseNotContains` (catches cop-outs and wrong terms).
 
+### Seed-Stable vs Market-Dynamic Assertions
+
+Every assertion value falls into one of two categories:
+
+**Seed-stable values** — Derived from `scripts/seed-eval-user.sh`. These never change unless the seed script is re-authored. Hardcode them directly in eval JSON.
+
+Examples: share counts (`"7"` for AAPL), cost basis (`"$1,855.00"`), dividend totals (`"$30.05"`), fee totals (`"$24.00"`), ticker symbols (`"AAPL"`).
+
+**Market-dynamic values** — Depend on live market prices. These change every trading day. Current portfolio value, P&L, allocation percentages, individual holding values — all volatile. **Never hardcode these.** Use snapshot templates instead.
+
+### Snapshot Template Syntax
+
+The eval runners capture a `PortfolioSnapshot` from Ghostfolio's API before every eval run (this already happens via `captureSnapshot()`). Templates in eval JSON are resolved against this snapshot at runtime.
+
+**Syntax:** `{{snapshot:<path>}}`
+
+**Available paths:**
+
+| Template                                     | Resolves to             | Format                     |
+| -------------------------------------------- | ----------------------- | -------------------------- |
+| `{{snapshot:holdings.<SYMBOL>.quantity}}`    | Share count             | raw number (e.g. `7`)      |
+| `{{snapshot:holdings.<SYMBOL>.marketPrice}}` | Current price per share | dollar (e.g. `$228.50`)    |
+| `{{snapshot:holdings.<SYMBOL>.value}}`       | Total holding value     | dollar (e.g. `$1,599.50`)  |
+| `{{snapshot:holdings.<SYMBOL>.allocation}}`  | Portfolio allocation    | percent (e.g. `12.5%`)     |
+| `{{snapshot:holdings.<SYMBOL>.performance}}` | Holding return          | percent (e.g. `23.1%`)     |
+| `{{snapshot:performance.netWorth}}`          | Total portfolio value   | dollar (e.g. `$13,245.00`) |
+| `{{snapshot:performance.invested}}`          | Total invested          | dollar (e.g. `$12,260.35`) |
+| `{{snapshot:performance.netPnl}}`            | Net P&L dollar amount   | dollar (e.g. `$984.65`)    |
+| `{{snapshot:performance.netPnlPct}}`         | Net P&L percentage      | percent (e.g. `8.03%`)     |
+
+**Formatting rules:**
+
+- Dollar values: `$X,XXX.XX` (comma-separated, 2 decimal places)
+- Percentages: `X.X%` (1 decimal place, no leading zero for values >= 1%)
+- Raw numbers: plain integer or decimal as-is
+
+**Resolution rules:**
+
+1. Before assertion comparison, the runner scans all `responseContains`, `responseContainsAny`, and `responseNotContains` values
+2. Any value matching `{{snapshot:*}}` is replaced with the formatted snapshot value
+3. If a snapshot field is missing (API error, holding not found), the **individual assertion is skipped with a warning** — not a hard failure. This prevents snapshot capture errors from cascading into false eval failures.
+4. Resolution happens in-memory only — the eval JSON file on disk is never modified
+
+**Example — market-dynamic golden eval:**
+
+```json
+{
+  "id": "gs-portfolio-summary-003",
+  "description": "portfolio value matches live data",
+  "input": { "message": "What is my portfolio worth right now?" },
+  "expect": {
+    "toolsCalled": ["portfolio_summary"],
+    "noToolErrors": true,
+    "responseNonEmpty": true,
+    "responseContains": ["{{snapshot:performance.netWorth}}"],
+    "responseContainsAny": [["portfolio", "net worth", "total value"]],
+    "responseNotContains": ["I don't know"],
+    "maxLatencyMs": 30000
+  }
+}
+```
+
+At runtime, if the snapshot shows net worth of $13,245.00, the assertion becomes `responseContains: ["$13,245.00"]`.
+
+### When to Use Each
+
+| Value type            | Source      | Assertion style                         | Example                        |
+| --------------------- | ----------- | --------------------------------------- | ------------------------------ |
+| Ticker symbols        | Seed script | Hardcoded `responseContains`            | `"AAPL"`                       |
+| Share counts          | Seed script | Hardcoded `responseContains`            | `"7"`                          |
+| Cost basis            | Seed script | Hardcoded `responseContains`            | `"$1,855.00"`                  |
+| Dividend totals       | Seed script | Hardcoded `responseContains`            | `"$30.05"`                     |
+| Fee totals            | Seed script | Hardcoded `responseContains`            | `"$24.00"`                     |
+| Domain terms          | N/A         | `responseContainsAny` synonym groups    | `["dividend", "distribution"]` |
+| Current holding value | Live market | `{{snapshot:holdings.AAPL.value}}`      | Resolved at runtime            |
+| Portfolio net worth   | Live market | `{{snapshot:performance.netWorth}}`     | Resolved at runtime            |
+| P&L amount            | Live market | `{{snapshot:performance.netPnl}}`       | Resolved at runtime            |
+| Allocation %          | Live market | `{{snapshot:holdings.AAPL.allocation}}` | Resolved at runtime            |
+
+**Rule of thumb:** If the value comes from `seed-eval-user.sh`, hardcode it. If it depends on Yahoo Finance prices, use a snapshot template.
+
 ---
 
 ## Labeled Eval Generation (scales with registry)
@@ -768,7 +849,7 @@ Approve / Revise (specify case #s) / Regenerate batch?
 - **Golden = single-tool routing sanity (5-10 cases).** One prompt, one tool. Does the registry + system prompt route correctly?
 - **Labeled = multi-tool task execution (scales with registry).** Case counts grow with overlaps, clusters, and total tools. Compute using the scaling formula before generating. Ambiguous cases get the most coverage because that's where routing breaks.
 - **The description is upstream.** If evals fail because of bad routing, the fix is in the tool's `description` field, not in loosening the eval assertions. Report this back to the tool factory skill.
-- **`responseContains` must reference exact seed data.** Use hardcoded values from the reference table — dollar amounts, share counts, ticker symbols. These prove the tool ran and returned real data.
+- **`responseContains` must reference exact seed data OR snapshot templates.** Seed-stable values (share counts, cost basis, dividend totals) are hardcoded from the reference table. Market-dynamic values (current prices, P&L, allocation) use `{{snapshot:*}}` templates resolved at runtime. Never hardcode a value that depends on live market prices.
 - **`responseContainsAny` enforces domain precision with flexibility.** Each synonym group allows natural phrasing while requiring correct financial vocabulary. The agent shouldn't sound robotic, but it must use the right terms.
 - **`responseNotContains` catches cop-outs AND imprecision.** Include "I don't know" / "no information" / "unable to" for cop-outs. Also include wrong or imprecise terms — if the agent says "payment" when it should say "dividend", that's a precision failure.
 - **Golden evals must pass before reporting success.** If they fail, diagnose whether it's a description problem (report upstream) or a keyword problem (fix locally).
