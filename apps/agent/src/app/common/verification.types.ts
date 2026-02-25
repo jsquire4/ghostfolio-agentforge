@@ -8,9 +8,10 @@ export interface VerificationResult {
 
 export interface Verifier {
   name: string;
-  order: number;
+  order: string;
   verify: (
     response: string,
-    toolCalls: ToolCallRecord[]
+    toolCalls: ToolCallRecord[],
+    channel?: string
   ) => Promise<VerificationResult>;
 }

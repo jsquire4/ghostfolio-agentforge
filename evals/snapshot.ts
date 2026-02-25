@@ -2,7 +2,8 @@
 // ground truth before eval runs. Shows exactly what data the agent has access
 // to, so instructors can verify responses against known facts.
 
-const GHOSTFOLIO_URL = process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
+const GHOSTFOLIO_URL =
+  process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
 
 // ── ANSI Helpers ────────────────────────────────────────────
 
@@ -100,7 +101,9 @@ export async function captureSnapshot(jwt: string): Promise<PortfolioSnapshot> {
       netPerformancePercent: h.netPerformancePercent
     }));
   } catch (err) {
-    errors.push(`Holdings: ${err instanceof Error ? err.message : String(err)}`);
+    errors.push(
+      `Holdings: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   // Performance
@@ -110,7 +113,9 @@ export async function captureSnapshot(jwt: string): Promise<PortfolioSnapshot> {
     }>('/api/v2/portfolio/performance?range=max', jwt);
     performance = data.performance;
   } catch (err) {
-    errors.push(`Performance: ${err instanceof Error ? err.message : String(err)}`);
+    errors.push(
+      `Performance: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   // Risk report / X-Ray
@@ -120,7 +125,12 @@ export async function captureSnapshot(jwt: string): Promise<PortfolioSnapshot> {
         categories: {
           key: string;
           name: string;
-          rules: { key: string; name: string; isActive: boolean; value: boolean }[];
+          rules: {
+            key: string;
+            name: string;
+            isActive: boolean;
+            value: boolean;
+          }[];
         }[];
       };
     }>('/api/v1/portfolio/report', jwt);
@@ -146,7 +156,9 @@ export async function captureSnapshot(jwt: string): Promise<PortfolioSnapshot> {
     );
     aiPrompt = data.prompt;
   } catch (err) {
-    errors.push(`AI Prompt: ${err instanceof Error ? err.message : String(err)}`);
+    errors.push(
+      `AI Prompt: ${err instanceof Error ? err.message : String(err)}`
+    );
   }
 
   return {
@@ -183,9 +195,13 @@ export function printSnapshot(snap: PortfolioSnapshot): void {
   // Performance summary
   if (snap.performance) {
     const p = snap.performance;
-    console.log(`  ${CYAN}Net Worth:${RESET}  ${fmtDollar(p.currentNetWorth ?? p.currentValueInBaseCurrency)}`);
+    console.log(
+      `  ${CYAN}Net Worth:${RESET}  ${fmtDollar(p.currentNetWorth ?? p.currentValueInBaseCurrency)}`
+    );
     console.log(`  ${CYAN}Invested:${RESET}   ${fmtDollar(p.totalInvestment)}`);
-    console.log(`  ${CYAN}Net P&L:${RESET}    ${fmtDollar(p.netPerformance)} (${fmtPct(p.netPerformancePercentage)})`);
+    console.log(
+      `  ${CYAN}Net P&L:${RESET}    ${fmtDollar(p.netPerformance)} (${fmtPct(p.netPerformancePercentage)})`
+    );
   }
 
   // Top 5 holdings

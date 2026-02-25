@@ -17,7 +17,11 @@
               user: msg.role === 'user'
             }"
           >
-            <span class="bubble">{{ msg.content }}</span>
+            @if (msg.role === 'agent') {
+              <span class="bubble" [innerHTML]="msg.content"></span>
+            } @else {
+              <span class="bubble">{{ msg.content }}</span>
+            }
           </div>
         }
         @if (messages.length === 0 && !isLoading) {

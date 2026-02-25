@@ -5,6 +5,7 @@ import { AuditRepository } from './audit.repository';
 import { DatabaseService } from './database.service';
 import { FeedbackRepository } from './feedback.repository';
 import { InsightRepository } from './insight.repository';
+import { MetricsRepository } from './metrics.repository';
 
 @Global()
 @Module({
@@ -12,14 +13,16 @@ import { InsightRepository } from './insight.repository';
     DatabaseService,
     InsightRepository,
     AuditRepository,
-    FeedbackRepository
+    FeedbackRepository,
+    MetricsRepository
   ],
   imports: [ConfigModule],
   providers: [
     DatabaseService,
     InsightRepository,
     AuditRepository,
-    FeedbackRepository
+    FeedbackRepository,
+    MetricsRepository
   ]
 })
 export class DatabaseModule {}

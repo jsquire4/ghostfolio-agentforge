@@ -15,9 +15,7 @@ const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8000';
 const COST_PER_TOKEN = 0.000003; // rough estimate for GPT-4o-mini
 
 function loadGoldenCases(): GoldenEvalCase[] {
-  const files = readdirSync(GOLDEN_DIR).filter((f) =>
-    f.endsWith('.eval.json')
-  );
+  const files = readdirSync(GOLDEN_DIR).filter((f) => f.endsWith('.eval.json'));
   const cases: GoldenEvalCase[] = [];
   for (const file of files) {
     const content = readFileSync(join(GOLDEN_DIR, file), 'utf-8');
@@ -37,7 +35,8 @@ async function getJwt(): Promise<string> {
   //    This produces a JWT that Ghostfolio recognizes as a real user,
   //    so tool calls that forward the JWT to Ghostfolio's API succeed.
   const apiToken = process.env.GHOSTFOLIO_API_TOKEN;
-  const ghostfolioUrl = process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
+  const ghostfolioUrl =
+    process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
 
   if (apiToken) {
     const response = await fetch(`${ghostfolioUrl}/api/v1/auth/anonymous`, {
@@ -126,10 +125,19 @@ function buildCriteria(evalCase: GoldenEvalCase): string[] {
   if (evalCase.expect.noToolErrors) criteria.push('no tool errors');
   if (evalCase.expect.responseNonEmpty) criteria.push('response non-empty');
   if (evalCase.expect.responseContains) {
-    criteria.push(`response contains: [${evalCase.expect.responseContains.join(', ')}]`);
+    criteria.push(
+      `response contains: [${evalCase.expect.responseContains.join(', ')}]`
+    );
+  }
+  if (evalCase.expect.responseContainsAny) {
+    criteria.push(
+      `response contains any: ${evalCase.expect.responseContainsAny.map((g) => `[${g.join('|')}]`).join(', ')}`
+    );
   }
   if (evalCase.expect.responseNotContains) {
-    criteria.push(`response excludes: [${evalCase.expect.responseNotContains.join(', ')}]`);
+    criteria.push(
+      `response excludes: [${evalCase.expect.responseNotContains.join(', ')}]`
+    );
   }
   if (evalCase.expect.maxLatencyMs) {
     criteria.push(`latency < ${evalCase.expect.maxLatencyMs}ms`);
@@ -178,6 +186,20 @@ function assertCase(
     }
   }
 
+  // responseContainsAny — at least one from each synonym group
+  if (evalCase.expect.responseContainsAny) {
+    for (const group of evalCase.expect.responseContainsAny) {
+      const found = group.some((synonym) =>
+        response.message.toLowerCase().includes(synonym.toLowerCase())
+      );
+      if (!found) {
+        errors.push(
+          `Response missing any of synonym group: [${group.join(', ')}]`
+        );
+      }
+    }
+  }
+
   // responseNotContains
   if (evalCase.expect.responseNotContains) {
     for (const substr of evalCase.expect.responseNotContains) {
@@ -188,7 +210,10 @@ function assertCase(
   }
 
   // maxLatencyMs
-  if (evalCase.expect.maxLatencyMs && latencyMs > evalCase.expect.maxLatencyMs) {
+  if (
+    evalCase.expect.maxLatencyMs &&
+    latencyMs > evalCase.expect.maxLatencyMs
+  ) {
     errors.push(
       `Latency ${latencyMs}ms exceeded budget of ${evalCase.expect.maxLatencyMs}ms`
     );
@@ -222,7 +247,8 @@ export async function runGoldenEvals(): Promise<EvalSuiteResult> {
 
       const toolsSummary = response.toolCalls
         .map(
-          (tc) => `${tc.toolName} (${tc.durationMs}ms, ${tc.success ? 'ok' : 'err'})`
+          (tc) =>
+            `${tc.toolName} (${tc.durationMs}ms, ${tc.success ? 'ok' : 'err'})`
         )
         .join(', ');
 

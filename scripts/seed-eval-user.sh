@@ -93,8 +93,9 @@ echo -e "  ${GREEN}✓${NC} GHOSTFOLIO_API_TOKEN written to .env"
 
 echo -e "  ${CYAN}→${NC} Seeding demo portfolio..."
 
-# Random cash between $5,000 and $25,000 (for testing buy/sell writes later)
-CASH_AMOUNT=$(( (RANDOM % 20001) + 5000 ))
+# Fixed cash deposit — hardcoded so golden evals can assert exact values.
+# DO NOT randomize. Eval assertions depend on this exact amount.
+CASH_AMOUNT=10000
 
 IMPORT_RESPONSE=$(curl -sf -X POST "$GHOSTFOLIO_URL/api/v1/import" \
   -H "Content-Type: application/json" \
@@ -196,7 +197,7 @@ echo -e "    ${DIM}Sold:       AAPL x3 (realized gain)${NC}"
 echo -e "    ${DIM}Dividends:  AAPL x2, MSFT x2, VTI x1${NC}"
 echo -e "    ${DIM}Interest:   2 payments (\$81.25)${NC}"
 echo -e "    ${DIM}Fees:       2 mgmt fees (\$24.00)${NC}"
-echo -e "    ${DIM}Cash:       \$$CASH_AMOUNT${NC}"
+echo -e "    ${DIM}Cash:       \$10,000${NC}"
 
 # ── Summary ──────────────────────────────────────────────────
 

@@ -37,11 +37,12 @@ function baseBandFromToolCalls(toolCalls: ToolCallRecord[]): Band {
 
 export class ConfidenceVerifier implements Verifier {
   name = 'confidence_scoring';
-  order = 40;
+  order = 'U-0001';
 
   async verify(
     response: string,
-    toolCalls: ToolCallRecord[]
+    toolCalls: ToolCallRecord[],
+    _channel?: string // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<VerificationResult> {
     const baseBand = baseBandFromToolCalls(toolCalls);
     const hedgingCount = countHedgingTerms(response);

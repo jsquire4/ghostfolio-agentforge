@@ -12,6 +12,12 @@ export class ToolRegistryService {
         `Tool registration failed: missing required field(s) on "${def.name ?? 'unnamed'}"`
       );
     }
+    const validLevels = ['high', 'medium', 'low'];
+    if (!validLevels.includes(def.consequenceLevel)) {
+      throw new Error(
+        `Tool "${def.name}": consequenceLevel must be one of ${validLevels.join(', ')}`
+      );
+    }
     if (!/^[a-z][a-z0-9_]*$/.test(def.name)) {
       throw new Error(
         `Tool "${def.name}": name must be snake_case (lowercase letters and underscores only)`

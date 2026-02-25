@@ -1,5 +1,6 @@
 import { Body, Controller, Post } from '@nestjs/common';
 import {
+  IsIn,
   IsNotEmpty,
   IsOptional,
   IsString,
@@ -8,6 +9,7 @@ import {
 } from 'class-validator';
 
 import { AgentService } from '../agent/agent.service';
+import { VALID_CHANNELS } from '../agent/channel.capabilities';
 import { AuthUser } from '../common/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
 import { ChatResponse } from '../common/interfaces';
@@ -21,6 +23,11 @@ export class ChatRequestDto {
   @IsOptional()
   @IsUUID()
   conversationId?: string;
+
+  @IsOptional()
+  @IsString()
+  @IsIn(VALID_CHANNELS)
+  channel?: string;
 }
 
 @Controller('v1/chat')

@@ -14,6 +14,7 @@ import { makeChatResponse } from '../../../test-fixtures';
 import { validAuthHeader } from '../../../test-fixtures/jwt.fixture';
 import { ActionsController } from '../../actions/actions.controller';
 import { AgentService } from '../../agent/agent.service';
+import { HitlMatrixService } from '../../agent/hitl-matrix.service';
 import { ChatController } from '../../chat/chat.controller';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { JwtAuthExceptionFilter } from '../../common/jwt-auth.exception-filter';
@@ -51,7 +52,15 @@ jest.mock('../../agent/agent.service', () => ({
   providers: [
     { provide: APP_FILTER, useClass: JwtAuthExceptionFilter },
     { provide: APP_GUARD, useClass: JwtAuthGuard },
-    { provide: AgentService, useValue: {} } // overridden in test setup
+    { provide: AgentService, useValue: {} }, // overridden in test setup
+    {
+      provide: HitlMatrixService,
+      useValue: {
+        getMatrix: jest.fn(),
+        setMatrix: jest.fn(),
+        computeAutoApproveSet: jest.fn()
+      }
+    }
   ]
 })
 class IntegrationTestModule {}

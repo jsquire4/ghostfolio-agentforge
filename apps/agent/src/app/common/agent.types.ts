@@ -1,4 +1,4 @@
-import { ToolCallRecord, ToolCategory } from './tool.types';
+import { ConsequenceLevel, ToolCallRecord, ToolCategory } from './tool.types';
 
 export interface PendingAction {
   id: string;
@@ -14,6 +14,7 @@ export interface PendingAction {
 export interface ChatRequest {
   message: string;
   conversationId?: string;
+  channel?: string;
 }
 
 export interface ChatResponse {
@@ -32,6 +33,27 @@ export interface UserContext {
   permissions?: string[];
   aiPromptContext?: string;
 }
+
+export type OutputFormat = 'markdown' | 'plain' | 'csv' | 'html';
+
+export interface ChannelCapabilities {
+  channel: string;
+  supportedFormats: OutputFormat[];
+  maxResponseLength?: number;
+}
+
+export type HitlDecision = 'auto-approve' | 'confirm';
+
+export type HitlMatrix = Record<
+  ToolCategory,
+  Record<ConsequenceLevel, HitlDecision>
+>;
+
+export const DEFAULT_HITL_MATRIX: HitlMatrix = {
+  read: { low: 'auto-approve', medium: 'auto-approve', high: 'confirm' },
+  analysis: { low: 'auto-approve', medium: 'auto-approve', high: 'confirm' },
+  write: { low: 'confirm', medium: 'confirm', high: 'confirm' }
+};
 
 export interface AgentHandoff {
   fromAgent: string;

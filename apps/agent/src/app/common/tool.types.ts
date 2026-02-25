@@ -4,12 +4,14 @@ import { GhostfolioAuth, UserAuth, ServiceAuth } from './auth.types';
 import { IGhostfolioClient } from './client.types';
 
 export type ToolCategory = 'read' | 'write' | 'analysis';
+export type ConsequenceLevel = 'high' | 'medium' | 'low';
 
 interface BaseToolContext {
   userId: string;
   abortSignal: AbortSignal;
   auth: GhostfolioAuth;
   client: IGhostfolioClient;
+  autoApproveTools?: Set<string>;
 }
 
 export interface UserToolContext extends BaseToolContext {
@@ -34,6 +36,7 @@ export interface ToolDefinition {
   description: string;
   schema: z.ZodTypeAny;
   category: ToolCategory;
+  consequenceLevel: ConsequenceLevel;
   requiresConfirmation: boolean;
   timeout: number;
   tags?: string[];

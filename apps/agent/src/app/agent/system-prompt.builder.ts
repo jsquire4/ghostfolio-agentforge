@@ -1,9 +1,11 @@
 import { UserContext } from '../common/interfaces';
 import { ToolDefinition } from '../common/tool.types';
+import { getChannelCapabilities } from './channel.capabilities';
 
 export function buildSystemPrompt(
   userContext: UserContext,
-  tools: ToolDefinition[] = []
+  tools: ToolDefinition[] = [],
+  channel?: string
 ): string {
   const sections: string[] = [];
 
@@ -48,9 +50,9 @@ export function buildSystemPrompt(
 
     toolLines.push(
       '',
-      'Pick the most specific tool for the user\'s question. ' +
+      "Pick the most specific tool for the user's question. " +
         'If no tool is relevant, respond using your general knowledge without calling any tool. ' +
-        'Never call a tool just because it exists — only when the user\'s request matches its purpose.'
+        "Never call a tool just because it exists — only when the user's request matches its purpose."
     );
 
     sections.push(toolLines.join('\n'));
@@ -85,18 +87,45 @@ export function buildSystemPrompt(
       '- NEVER perform arithmetic — use calculation tools.\n' +
       '- NEVER guess at holdings, positions, or account details.\n' +
       '- NEVER give specific buy/sell recommendations without requesting user confirmation first.\n' +
-      '- Always cite which tool produced each figure.\n' +
+      '- Always cite which tool produced each figure using "(source: tool_name)" at the end of the relevant sentence or paragraph.\n' +
       '- If uncertain, say "I don\'t have enough data" — never speculate.'
   );
 
-  // 6. Formatting
-  sections.push(
-    'FORMATTING:\n' +
-      '- Keep responses concise.\n' +
-      '- Use bullet points for lists.\n' +
-      '- Warn about risks prominently.\n' +
-      "- Use the user's base currency for all monetary values."
+  // 6. Formatting — driven by channel capabilities
+  const caps = getChannelCapabilities(channel);
+  const formats = caps.supportedFormats;
+  const formatLines: string[] = ['FORMATTING:'];
+
+  if (formats.includes('html') && formats.includes('plain')) {
+    formatLines.push(
+      '- Use plain text for short answers.',
+      '- Use HTML tables and lists for structured data.',
+      '- No markdown.'
+    );
+  } else if (formats.includes('markdown')) {
+    formatLines.push('- Use markdown for formatting.');
+  } else if (formats.includes('csv')) {
+    formatLines.push(
+      '- Respond only with CSV.',
+      '- No prose, no headers outside the CSV.'
+    );
+  } else {
+    formatLines.push('- Plain text only. No markdown, no HTML.');
+  }
+
+  formatLines.push(
+    '- Keep responses concise.',
+    '- Warn about risks prominently.',
+    "- Use the user's base currency for all monetary values."
   );
+
+  if (caps.maxResponseLength) {
+    formatLines.push(
+      `- Maximum response length: ${caps.maxResponseLength} characters.`
+    );
+  }
+
+  sections.push(formatLines.join('\n'));
 
   return sections.join('\n\n');
 }

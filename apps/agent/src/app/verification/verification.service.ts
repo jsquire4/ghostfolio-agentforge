@@ -18,7 +18,9 @@ export class VerificationService {
     @Optional() @Inject(VERIFIERS_OVERRIDE) verifiersOverride?: Verifier[]
   ) {
     const source = verifiersOverride ?? ALL_VERIFIERS;
-    const sorted = [...source].sort((a, b) => a.order - b.order);
+    const sorted = [...source].sort((a, b) =>
+      a.order.localeCompare(b.order, 'en')
+    );
     const names = new Set<string>();
     for (const v of sorted) {
       if (names.has(v.name)) {
@@ -34,17 +36,19 @@ export class VerificationService {
   async runAll(
     response: string,
     toolCalls: ToolCallRecord[],
-    userId: string
+    userId: string,
+    channel?: string
   ): Promise<{ warnings: string[]; flags: string[] }> {
     const allWarnings: string[] = [];
     const allFlags: string[] = [];
 
-    // Pipeline does NOT short-circuit — all verifiers run regardless of previous pass/fail
+    // Pipeline short-circuits when flags (hard failures) are emitted; warnings don't stop execution
     for (const verifier of this.verifiers) {
       try {
-        const result = await verifier.verify(response, toolCalls);
+        const result = await verifier.verify(response, toolCalls, channel);
         allWarnings.push(...result.warnings);
         allFlags.push(...result.flags);
+        if (allFlags.length > 0) break;
       } catch (error) {
         const name = verifier.name ?? 'UnknownVerifier';
         const msg = error instanceof Error ? error.message : String(error);

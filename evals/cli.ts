@@ -8,7 +8,6 @@
 //   npm run eval snapshot
 //   npm run eval coverage
 //   npm run eval rubric
-
 import { execSync, spawn } from 'child_process';
 import { existsSync, mkdirSync } from 'fs';
 import { sign } from 'jsonwebtoken';
@@ -38,7 +37,8 @@ const DOUBLE_LINE = '\u2550'.repeat(61);
 
 // ── JWT Helper ──────────────────────────────────────────────
 
-const GHOSTFOLIO_URL = process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
+const GHOSTFOLIO_URL =
+  process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
 
 async function getGhostfolioJwt(): Promise<string> {
   if (process.env.EVAL_JWT) {
@@ -64,7 +64,9 @@ async function getGhostfolioJwt(): Promise<string> {
 
   const secret = process.env.JWT_SECRET_KEY;
   if (!secret) {
-    throw new Error('No EVAL_JWT, GHOSTFOLIO_API_TOKEN, or JWT_SECRET_KEY found.');
+    throw new Error(
+      'No EVAL_JWT, GHOSTFOLIO_API_TOKEN, or JWT_SECRET_KEY found.'
+    );
   }
   return sign({ id: 'eval-user', iat: Math.floor(Date.now() / 1000) }, secret);
 }
@@ -97,21 +99,17 @@ function printGoldenResults(suite: EvalSuiteResult): void {
     );
 
     if (r.details) {
-      console.log(
-        `    ${CYAN}Prompt:${RESET}   "${r.details.prompt}"`
-      );
-      console.log(
-        `    ${CYAN}Tools:${RESET}    ${r.details.tools}`
-      );
+      console.log(`    ${CYAN}Prompt:${RESET}   "${r.details.prompt}"`);
+      console.log(`    ${CYAN}Tools:${RESET}    ${r.details.tools}`);
       if (r.details.response) {
         const respStr = String(r.details.response);
-        console.log(
-          `    ${CYAN}Response:${RESET} ${truncate(respStr, 120)}`
-        );
+        console.log(`    ${CYAN}Response:${RESET} ${truncate(respStr, 120)}`);
       }
       const parts: string[] = [];
-      if (r.details.ttftMs) parts.push(`TTFT: ${formatMs(r.details.ttftMs as number)}`);
-      if (r.details.estimatedCost) parts.push(`Cost: ${formatCost(r.details.estimatedCost as number)}`);
+      if (r.details.ttftMs)
+        parts.push(`TTFT: ${formatMs(r.details.ttftMs as number)}`);
+      if (r.details.estimatedCost)
+        parts.push(`Cost: ${formatCost(r.details.estimatedCost as number)}`);
       if (r.details.tokens) parts.push(`Tokens: ${r.details.tokens}`);
       if (parts.length > 0) {
         console.log(`    ${parts.join(` ${DIM}\u00b7${RESET} `)}`);
@@ -144,30 +142,27 @@ function printGoldenResults(suite: EvalSuiteResult): void {
 function printLabeledResults(suite: EvalSuiteResult): void {
   const groups = new Map<string, EvalCaseResult[]>();
   for (const r of suite.cases) {
-    const diff =
-      (r.details?.difficulty as string) || 'unknown';
+    const diff = (r.details?.difficulty as string) || 'unknown';
     if (!groups.has(diff)) groups.set(diff, []);
     groups.get(diff)!.push(r);
   }
 
   for (const [difficulty, cases] of groups) {
-    console.log(
-      `\n${BOLD} Labeled Evals \u2014 ${difficulty}${RESET}`
-    );
+    console.log(`\n${BOLD} Labeled Evals \u2014 ${difficulty}${RESET}`);
     console.log(LINE);
 
     for (const r of cases) {
       if (r.passed) {
-        console.log(
-          `  ${CHECK} ${DIM}${r.id}${RESET} ${r.description}`
-        );
+        console.log(`  ${CHECK} ${DIM}${r.id}${RESET} ${r.description}`);
         if (r.details) {
-          console.log(
-            `    ${CYAN}Tools:${RESET} ${r.details.tools}`
-          );
+          console.log(`    ${CYAN}Tools:${RESET} ${r.details.tools}`);
           const parts: string[] = [];
-          if (r.details.ttftMs) parts.push(`TTFT: ${formatMs(r.details.ttftMs as number)}`);
-          if (r.details.estimatedCost) parts.push(`Cost: ${formatCost(r.details.estimatedCost as number)}`);
+          if (r.details.ttftMs)
+            parts.push(`TTFT: ${formatMs(r.details.ttftMs as number)}`);
+          if (r.details.estimatedCost)
+            parts.push(
+              `Cost: ${formatCost(r.details.estimatedCost as number)}`
+            );
           if (r.details.tokens) parts.push(`Tokens: ${r.details.tokens}`);
           if (parts.length > 0) {
             console.log(`    ${parts.join(` ${DIM}\u00b7${RESET} `)}`);
@@ -179,9 +174,7 @@ function printLabeledResults(suite: EvalSuiteResult): void {
           }
         }
       } else {
-        console.log(
-          `  ${CROSS} ${DIM}${r.id}${RESET} ${r.description}`
-        );
+        console.log(`  ${CROSS} ${DIM}${r.id}${RESET} ${r.description}`);
         console.log(`    ${RED}${r.error}${RESET}`);
       }
     }
@@ -283,7 +276,9 @@ async function main(): Promise<void> {
   }
 
   // Commands that need the server — capture snapshot (printed after evals)
-  const needsSnapshot = ['golden', 'labeled', 'all', 'snapshot'].includes(command);
+  const needsSnapshot = ['golden', 'labeled', 'all', 'snapshot'].includes(
+    command
+  );
   let snapshot: PortfolioSnapshot | null = null;
 
   if (needsSnapshot) {
@@ -370,7 +365,9 @@ async function main(): Promise<void> {
       // If browser open fails, the path is already printed above
     }
   } else if (wantsReport && !snapshot) {
-    console.log(`\n  ${YELLOW}! Reports skipped — snapshot was not captured${RESET}`);
+    console.log(
+      `\n  ${YELLOW}! Reports skipped — snapshot was not captured${RESET}`
+    );
   }
 
   const anyFailed = suites.some((s) => s.totalFailed > 0);

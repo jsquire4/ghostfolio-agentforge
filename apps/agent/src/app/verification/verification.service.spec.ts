@@ -39,8 +39,8 @@ describe('VerificationService', () => {
     );
   });
 
-  it('does not short-circuit — all verifiers run even if one fails', async () => {
-    // Response with unsourced financial claims: source_attribution fails (pass: false).
+  it('runs all verifiers when only warnings are emitted (no short-circuit)', async () => {
+    // Response with unsourced financial claims: source_attribution emits warnings (not flags).
     // Confidence verifier should still run and contribute its own result.
     const response = 'Your portfolio is worth $50,000 this year.';
     const toolCalls: ToolCallRecord[] = [];
@@ -58,6 +58,42 @@ describe('VerificationService', () => {
       w.includes('Low confidence')
     );
     expect(confidenceWarning).toBeDefined();
+  });
+
+  it('short-circuits pipeline when flags are emitted', async () => {
+    const flaggingVerifier = {
+      name: 'early_flagger',
+      order: 'A-0000',
+      verify: jest.fn().mockResolvedValue({
+        pass: false,
+        warnings: ['early-warn'],
+        flags: ['critical-flag']
+      })
+    };
+    const laterVerifier = {
+      name: 'later_verifier',
+      order: 'Z-0001',
+      verify: jest.fn().mockResolvedValue({
+        pass: true,
+        warnings: ['later-warn'],
+        flags: []
+      })
+    };
+    const serviceWithShortCircuit = new VerificationService(
+      mockInsightRepository as any,
+      [flaggingVerifier, laterVerifier]
+    );
+
+    const result = await serviceWithShortCircuit.runAll(
+      'Response',
+      [],
+      'user-sc'
+    );
+
+    expect(result.flags).toEqual(['critical-flag']);
+    expect(result.warnings).toEqual(['early-warn']);
+    // Later verifier should NOT have been called
+    expect(laterVerifier.verify).not.toHaveBeenCalled();
   });
 
   it('persists insight when warnings are generated', async () => {
@@ -126,14 +162,14 @@ describe('VerificationService', () => {
   it('catches verifier throw and continues — does not crash pipeline', async () => {
     const throwingVerifier = {
       name: 'throwing_verifier',
-      order: 5,
+      order: 'A-0000',
       verify: async () => {
         throw new Error('Verifier failed');
       }
     };
     const passingVerifier = {
       name: 'passing_verifier',
-      order: 50,
+      order: 'Z-0001',
       verify: async () => ({ pass: true, warnings: [], flags: [] })
     };
     const serviceWithThrowing = new VerificationService(
@@ -150,14 +186,14 @@ describe('VerificationService', () => {
   it('throws when verifiers have duplicate names', () => {
     const dup = {
       name: 'dup',
-      order: 10,
+      order: 'A-0010',
       verify: async () => ({ pass: true, warnings: [], flags: [] })
     };
     expect(
       () =>
         new VerificationService(mockInsightRepository as any, [
           dup,
-          { ...dup, order: 20 }
+          { ...dup, order: 'A-0020' }
         ])
     ).toThrow('Duplicate verifier name: "dup"');
   });
@@ -178,7 +214,7 @@ describe('VerificationService', () => {
   it('handles verifier that throws non-Error', async () => {
     const stringThrowingVerifier = {
       name: 'string_thrower',
-      order: 5,
+      order: 'A-0000',
       verify: async () => {
         throw 'string error' as any;
       }
@@ -212,7 +248,7 @@ describe('VerificationService', () => {
   it('does not propagate pass value — only warnings and flags matter', async () => {
     const failingVerifier = {
       name: 'failing_but_quiet',
-      order: 5,
+      order: 'A-0000',
       verify: async () => ({ pass: false, warnings: [], flags: [] })
     };
     const serviceWithFailing = new VerificationService(
@@ -234,7 +270,7 @@ describe('VerificationService', () => {
   it('aggregates flags from verifiers', async () => {
     const flaggingVerifier = {
       name: 'flagging_verifier',
-      order: 5,
+      order: 'A-0000',
       verify: async () => ({
         pass: true,
         warnings: ['warn1'],
@@ -260,13 +296,13 @@ describe('VerificationService', () => {
     await service.runAll(response, toolCalls, 'user-12');
 
     const insertedRecord = mockInsightRepository.insert.mock.calls[0][0];
-    expect(insertedRecord.data.verifierCount).toBe(2); // source_attribution + confidence_scoring
+    expect(insertedRecord.data.verifierCount).toBe(4); // source_attribution + tool_citation + interface_format + confidence_scoring
   });
 
   it('uses "UnknownVerifier" fallback when verifier.name is undefined', async () => {
     const namelessVerifier = {
       name: undefined as unknown as string,
-      order: 5,
+      order: 'A-0000',
       verify: async () => {
         throw new Error('Verifier failed');
       }
@@ -287,7 +323,7 @@ describe('VerificationService', () => {
   it('only persists insight when flags are present but warnings are empty', async () => {
     const flagOnlyVerifier = {
       name: 'flag_only',
-      order: 5,
+      order: 'A-0000',
       verify: async () => ({
         pass: true,
         warnings: [],

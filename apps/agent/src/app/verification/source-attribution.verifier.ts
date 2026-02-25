@@ -6,11 +6,12 @@ import {
 
 export class SourceAttributionVerifier implements Verifier {
   name = 'source_attribution';
-  order = 10;
+  order = 'A-0001';
 
   async verify(
     response: string,
-    toolCalls: ToolCallRecord[]
+    toolCalls: ToolCallRecord[],
+    _channel?: string // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<VerificationResult> {
     const dollarPattern = /\$[\d,]+\.?\d*/g;
     const percentPattern = /\d+\.?\d*%/g;

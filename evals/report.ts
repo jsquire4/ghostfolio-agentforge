@@ -1,5 +1,4 @@
 // Eval report exporter — writes JSON and HTML reports for instructor review.
-
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 
@@ -52,7 +51,11 @@ export function writeJsonReport(
 // ── HTML Export ──────────────────────────────────────────────
 
 function escHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
 }
 
 function fmtDollar(n: number): string {
@@ -111,19 +114,29 @@ export function writeHtmlReport(
           const icon = c.passed ? '\u2713' : '\u2717';
           const cls = c.passed ? 'pass' : 'fail';
           const d = c.details || {};
-          const toolCalls = (d.toolCalls as { toolName: string; params: unknown; result: string; calledAt: string; durationMs: number; success: boolean }[]) || [];
+          const toolCalls =
+            (d.toolCalls as {
+              toolName: string;
+              params: unknown;
+              result: string;
+              calledAt: string;
+              durationMs: number;
+              success: boolean;
+            }[]) || [];
 
           // Build tool steps
-          const stepsHtml = toolCalls.length > 0
-            ? toolCalls.map((tc, i) => {
-                let parsedResult = '';
-                try {
-                  const parsed = JSON.parse(tc.result);
-                  parsedResult = JSON.stringify(parsed, null, 2);
-                } catch {
-                  parsedResult = tc.result;
-                }
-                return `
+          const stepsHtml =
+            toolCalls.length > 0
+              ? toolCalls
+                  .map((tc, i) => {
+                    let parsedResult = '';
+                    try {
+                      const parsed = JSON.parse(tc.result);
+                      parsedResult = JSON.stringify(parsed, null, 2);
+                    } catch {
+                      parsedResult = tc.result;
+                    }
+                    return `
                 <div class="step">
                   <div class="step-header">
                     <span class="step-num">Step ${i + 1}</span>
@@ -136,26 +149,32 @@ export function writeHtmlReport(
                     <div class="step-section"><span class="dim">Result:</span><pre>${escHtml(parsedResult)}</pre></div>
                   </div>
                 </div>`;
-              }).join('')
-            : '<p class="dim">No tool calls</p>';
+                  })
+                  .join('')
+              : '<p class="dim">No tool calls</p>';
 
           // Warnings & flags
           const warnings = (d.warnings as string[]) || [];
           const flags = (d.flags as string[]) || [];
-          const alertsHtml = (warnings.length > 0 || flags.length > 0)
-            ? `<div class="alerts">
+          const alertsHtml =
+            warnings.length > 0 || flags.length > 0
+              ? `<div class="alerts">
                 ${flags.map((f: string) => `<span class="alert flag">\u26a0 ${escHtml(f)}</span>`).join('')}
                 ${warnings.map((w: string) => `<span class="alert warn">${escHtml(w)}</span>`).join('')}
               </div>`
-            : '';
+              : '';
 
           // Metrics row
           const metrics = [
             d.ttftMs ? `TTFT: ${fmtMs(d.ttftMs as number)}` : '',
-            d.estimatedCost ? `Cost: ~$${(d.estimatedCost as number).toFixed(4)}` : '',
+            d.estimatedCost
+              ? `Cost: ~$${(d.estimatedCost as number).toFixed(4)}`
+              : '',
             d.tokens ? `Tokens: ${d.tokens}` : '',
             `Duration: ${fmtMs(c.durationMs)}`
-          ].filter(Boolean).join(' &middot; ');
+          ]
+            .filter(Boolean)
+            .join(' &middot; ');
 
           return `
           <details class="eval-card ${c.passed ? '' : 'eval-failed'}">
@@ -285,46 +304,70 @@ export function writeHtmlReport(
       <div class="value">${snapshot.holdings.length}</div>
       <div class="label">Holdings</div>
     </div>
-    ${snapshot.performance ? `
+    ${
+      snapshot.performance
+        ? `
     <div class="stat">
       <div class="value">${fmtDollar(snapshot.performance.currentNetWorth ?? snapshot.performance.currentValueInBaseCurrency)}</div>
       <div class="label">Net Worth</div>
-    </div>` : ''}
+    </div>`
+        : ''
+    }
   </div>
 
   ${suiteHtml}
 
   <h2>Portfolio Snapshot (Ground Truth)</h2>
 
-  ${snapshot.performance ? `
+  ${
+    snapshot.performance
+      ? `
   <h3>Performance</h3>
   <table>
     <tr><td>Net Worth</td><td>${fmtDollar(snapshot.performance.currentNetWorth ?? snapshot.performance.currentValueInBaseCurrency)}</td></tr>
     <tr><td>Total Invested</td><td>${fmtDollar(snapshot.performance.totalInvestment)}</td></tr>
     <tr><td>Net P&amp;L</td><td class="${snapshot.performance.netPerformance >= 0 ? 'positive' : 'negative'}">${fmtDollar(snapshot.performance.netPerformance)} (${fmtPct(snapshot.performance.netPerformancePercentage)})</td></tr>
-  </table>` : ''}
+  </table>`
+      : ''
+  }
 
-  ${snapshot.holdings.length > 0 ? `
+  ${
+    snapshot.holdings.length > 0
+      ? `
   <h3>Holdings</h3>
   <table>
     <thead><tr><th>Symbol</th><th>Name</th><th>Qty</th><th>Price</th><th>Value</th><th>Alloc</th><th>Return</th></tr></thead>
     <tbody>${holdingsRows}</tbody>
-  </table>` : ''}
+  </table>`
+      : ''
+  }
 
-  ${riskRows ? `
+  ${
+    riskRows
+      ? `
   <h3>Risk Report</h3>
   <table>
     <thead><tr><th></th><th>Rule</th></tr></thead>
     <tbody>${riskRows}</tbody>
-  </table>` : ''}
+  </table>`
+      : ''
+  }
 
-  ${snapshot.aiPrompt ? `
+  ${
+    snapshot.aiPrompt
+      ? `
   <h3>AI Prompt (what portfolio_summary sends to LLM)</h3>
-  <pre>${escHtml(snapshot.aiPrompt)}</pre>` : ''}
+  <pre>${escHtml(snapshot.aiPrompt)}</pre>`
+      : ''
+  }
 
-  ${snapshot.errors.length > 0 ? `
+  ${
+    snapshot.errors.length > 0
+      ? `
   <h3>Snapshot Errors</h3>
-  <ul>${snapshot.errors.map((e) => `<li class="fail">${escHtml(e)}</li>`).join('')}</ul>` : ''}
+  <ul>${snapshot.errors.map((e) => `<li class="fail">${escHtml(e)}</li>`).join('')}</ul>`
+      : ''
+  }
 
 </body>
 </html>`;

@@ -79,10 +79,10 @@ npm run test:agent
 
 Two-tier eval system for validating agent behavior. Both tiers send prompts through the full agent loop (LLM + real Ghostfolio API). See [`evals/dataset/`](evals/dataset/) for all eval cases.
 
-| Tier | What it tests | When to run |
-|------|--------------|-------------|
-| **Golden** | Known-answer prompts — correct tool called, tool succeeds, natural language response | Every commit |
-| **Labeled** | Routing under ambiguity, edge cases (prompt injection, off-topic), response quality | Branch merge |
+| Tier        | What it tests                                                                        | When to run  |
+| ----------- | ------------------------------------------------------------------------------------ | ------------ |
+| **Golden**  | Known-answer prompts — correct tool called, tool succeeds, natural language response | Every commit |
+| **Labeled** | Routing under ambiguity, edge cases (prompt injection, off-topic), response quality  | Branch merge |
 
 ### Eval Setup (Instructors / New Contributors)
 

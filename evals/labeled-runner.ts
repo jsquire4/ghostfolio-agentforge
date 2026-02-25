@@ -14,9 +14,7 @@ const LABELED_DIR = resolve(__dirname, 'dataset/labeled');
 const AGENT_URL = process.env.AGENT_URL || 'http://localhost:8000';
 const COST_PER_TOKEN = 0.000003; // rough estimate for GPT-4o-mini
 
-function loadLabeledCases(
-  difficulty?: string
-): LabeledEvalCase[] {
+function loadLabeledCases(difficulty?: string): LabeledEvalCase[] {
   const files = readdirSync(LABELED_DIR).filter((f) =>
     f.endsWith('.eval.json')
   );
@@ -40,7 +38,8 @@ async function getJwt(): Promise<string> {
 
   // 2. Exchange GHOSTFOLIO_API_TOKEN for a real Ghostfolio JWT
   const apiToken = process.env.GHOSTFOLIO_API_TOKEN;
-  const ghostfolioUrl = process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
+  const ghostfolioUrl =
+    process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
 
   if (apiToken) {
     const response = await fetch(`${ghostfolioUrl}/api/v1/auth/anonymous`, {
@@ -136,16 +135,21 @@ function assertCase(
   if (evalCase.expect.toolsCalled) {
     for (const expected of evalCase.expect.toolsCalled) {
       if (!calledTools.includes(expected)) {
-        errors.push(`Expected tool "${expected}" to be called, got [${calledTools.join(', ')}]`);
+        errors.push(
+          `Expected tool "${expected}" to be called, got [${calledTools.join(', ')}]`
+        );
       }
     }
   }
 
-  // toolsAcceptable — any-of match
+  // toolsAcceptable — any-of match (supports __none__ sentinel for "no tools called")
   if (evalCase.expect.toolsAcceptable) {
-    const matched = evalCase.expect.toolsAcceptable.some((acceptable) =>
-      acceptable.every((tool) => calledTools.includes(tool))
-    );
+    const matched = evalCase.expect.toolsAcceptable.some((acceptable) => {
+      if (acceptable.length === 1 && acceptable[0] === '__none__') {
+        return calledTools.length === 0;
+      }
+      return acceptable.every((tool) => calledTools.includes(tool));
+    });
     if (!matched) {
       errors.push(
         `No acceptable tool set matched. Called: [${calledTools.join(', ')}], ` +
@@ -187,6 +191,20 @@ function assertCase(
     }
   }
 
+  // responseContainsAny — at least one from each synonym group
+  if (evalCase.expect.responseContainsAny) {
+    for (const group of evalCase.expect.responseContainsAny) {
+      const found = group.some((synonym) =>
+        response.message.toLowerCase().includes(synonym.toLowerCase())
+      );
+      if (!found) {
+        errors.push(
+          `Response missing any of synonym group: [${group.join(', ')}]`
+        );
+      }
+    }
+  }
+
   // responseNotContains
   if (evalCase.expect.responseNotContains) {
     for (const substr of evalCase.expect.responseNotContains) {
@@ -215,7 +233,10 @@ function assertCase(
   }
 
   // maxLatencyMs
-  if (evalCase.expect.maxLatencyMs && latencyMs > evalCase.expect.maxLatencyMs) {
+  if (
+    evalCase.expect.maxLatencyMs &&
+    latencyMs > evalCase.expect.maxLatencyMs
+  ) {
     errors.push(
       `Latency ${latencyMs}ms exceeded budget of ${evalCase.expect.maxLatencyMs}ms`
     );
@@ -258,7 +279,10 @@ export async function runLabeledEvals(
       totalCost += cost;
 
       const toolsSummary = response.toolCalls
-        .map((tc) => `${tc.toolName} (${tc.durationMs}ms, ${tc.success ? 'ok' : 'err'})`)
+        .map(
+          (tc) =>
+            `${tc.toolName} (${tc.durationMs}ms, ${tc.success ? 'ok' : 'err'})`
+        )
         .join(', ');
 
       results.push({

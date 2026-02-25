@@ -12,6 +12,7 @@ const validTool = {
   }),
   schema: z.object({}),
   category: 'read' as const,
+  consequenceLevel: 'low' as const,
   requiresConfirmation: false,
   timeout: 5000
 };
@@ -56,6 +57,16 @@ describe('ToolRegistryService', () => {
         name: 'InvalidName'
       } as any)
     ).toThrow('name must be snake_case');
+  });
+
+  it('throws when consequenceLevel is invalid', () => {
+    expect(() =>
+      service.register({
+        ...validTool,
+        name: 'bad_level',
+        consequenceLevel: 'extreme' as any
+      })
+    ).toThrow('consequenceLevel must be one of');
   });
 
   it('throws when duplicate name', () => {

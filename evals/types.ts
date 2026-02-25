@@ -29,12 +29,13 @@ export interface GoldenEvalCase {
   description: string;
   input: { message: string };
   expect: {
-    toolsCalled: string[];               // exact tools that must be called
-    noToolErrors: boolean;               // all tool calls succeed
-    responseNonEmpty: boolean;           // agent produced a response
-    responseContains?: string[];         // substrings that must appear
-    responseNotContains?: string[];      // substrings that must NOT appear
-    maxLatencyMs?: number;               // response time budget
+    toolsCalled: string[]; // exact tools that must be called
+    noToolErrors: boolean; // all tool calls succeed
+    responseNonEmpty: boolean; // agent produced a response
+    responseContains?: string[]; // substrings that must ALL appear (exact seed values)
+    responseContainsAny?: string[][]; // at least one from EACH group must appear (synonym groups)
+    responseNotContains?: string[]; // substrings that must NOT appear (cop-outs, imprecision, leaks)
+    maxLatencyMs?: number; // response time budget
   };
 }
 
@@ -49,20 +50,21 @@ export interface LabeledEvalCase {
   input: { message: string };
   expect: {
     // Tool ROUTING assertions
-    toolsCalled?: string[];             // exact tools that must appear
-    toolsAcceptable?: string[][];       // any of these tool sets is valid
-    toolsNotCalled?: string[];          // tools that must NOT be called
+    toolsCalled?: string[]; // exact tools that must appear
+    toolsAcceptable?: string[][]; // any of these tool sets is valid
+    toolsNotCalled?: string[]; // tools that must NOT be called
 
-    noToolErrors?: boolean;             // all toolCalls have success: true
+    noToolErrors?: boolean; // all toolCalls have success: true
 
     // Response quality assertions (all deterministic)
     responseNonEmpty?: boolean;
-    responseContains?: string[];        // substrings that must appear
-    responseNotContains?: string[];     // substrings that must NOT appear
-    responseMatches?: string[];         // regex patterns the response must match
-    verifiersPassed?: boolean;          // warnings and flags arrays are empty
-    maxLatencyMs?: number;              // response must arrive within this budget
-    maxTokens?: number;                 // response token count ceiling
+    responseContains?: string[]; // substrings that must ALL appear (exact seed values)
+    responseContainsAny?: string[][]; // at least one from EACH group must appear (synonym groups)
+    responseNotContains?: string[]; // substrings that must NOT appear (cop-outs, imprecision, leaks)
+    responseMatches?: string[]; // regex patterns the response must match
+    verifiersPassed?: boolean; // warnings and flags arrays are empty
+    maxLatencyMs?: number; // response must arrive within this budget
+    maxTokens?: number; // response token count ceiling
   };
 }
 
@@ -74,9 +76,9 @@ export interface RubricEvalCase {
   description: string;
   input: { message: string };
   rubric: {
-    dimension: string;              // e.g. "accuracy", "completeness", "safety"
+    dimension: string; // e.g. "accuracy", "completeness", "safety"
     maxScore: number;
-    criteria: string;               // what each score level means
+    criteria: string; // what each score level means
   }[];
 }
 
@@ -87,8 +89,8 @@ export interface EvalCaseResult {
   description: string;
   passed: boolean;
   durationMs: number;
-  error?: string;                       // failure reason
-  details?: Record<string, unknown>;    // extra info (tools, ttft, cost, prompt, response, etc.)
+  error?: string; // failure reason
+  details?: Record<string, unknown>; // extra info (tools, ttft, cost, prompt, response, etc.)
 }
 
 export interface EvalSuiteResult {

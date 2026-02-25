@@ -19,6 +19,23 @@ export interface FeedbackRecord {
   createdAt: string;
 }
 
+export interface RequestMetrics {
+  id: string;
+  userId: string;
+  conversationId: string;
+  requestedAt: string;
+  totalLatencyMs: number;
+  tokensIn: number;
+  tokensOut: number;
+  estimatedCostUsd: number;
+  toolCallCount: number;
+  toolSuccessCount: number;
+  toolSuccessRate: number;
+  verifierWarningCount: number;
+  verifierFlagCount: number;
+  channel?: string;
+}
+
 export interface InsightRecord {
   id: string;
   userId: string;

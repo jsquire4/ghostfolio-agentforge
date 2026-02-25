@@ -47,7 +47,12 @@
       "noToolErrors": true,
       "responseNonEmpty": true,
       "responseContains": ["portfolio"],
-      "responseNotContains": ["fetchedAt", "\"tool\":", "\"error\":", "undefined"],
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined"
+      ],
       "maxLatencyMs": 30000
     }
   },

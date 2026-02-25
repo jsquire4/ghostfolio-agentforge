@@ -1,3 +1,4 @@
+import { BaseCallbackHandler } from '@langchain/core/callbacks/base';
 import { HumanMessage } from '@langchain/core/messages';
 import { StructuredTool, tool } from '@langchain/core/tools';
 import { isInterrupted, INTERRUPT, Command } from '@langchain/langgraph';
@@ -20,31 +21,53 @@ import {
   ChatRequest,
   ChatResponse,
   PendingAction,
+  RequestMetrics,
   ToolCallRecord,
   ToolResult,
   UserToolContext
 } from '../common/interfaces';
+import { MetricsRepository } from '../database/metrics.repository';
 import { GhostfolioClientService } from '../ghostfolio/ghostfolio-client.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 import { ALL_TOOLS } from '../tools/index';
 import { ToolRegistryService } from '../tools/tool-registry.service';
 import { VerificationService } from '../verification/verification.service';
+import { HitlMatrixService } from './hitl-matrix.service';
+import { estimateCostUsd } from './llm-cost-rates';
 import { PendingActionsService } from './pending-actions.service';
 import { RedisCheckpointSaver } from './redis-checkpoint.saver';
 import { buildSystemPrompt } from './system-prompt.builder';
+
+class TokenAccumulator extends BaseCallbackHandler {
+  name = 'TokenAccumulator';
+  tokensIn = 0;
+  tokensOut = 0;
+
+  handleLLMEnd(output: {
+    llmOutput?: {
+      tokenUsage?: { promptTokens?: number; completionTokens?: number };
+    };
+  }): void {
+    this.tokensIn += output.llmOutput?.tokenUsage?.promptTokens ?? 0;
+    this.tokensOut += output.llmOutput?.tokenUsage?.completionTokens ?? 0;
+  }
+}
 
 @Injectable()
 export class AgentService implements OnModuleInit {
   private readonly logger = new Logger(AgentService.name);
   private checkpointSaver!: RedisCheckpointSaver;
   private llm!: ChatOpenAI;
+  private modelName!: string;
 
   constructor(
     private readonly ghostfolioClient: GhostfolioClientService,
     private readonly toolRegistry: ToolRegistryService,
     private readonly verificationService: VerificationService,
     private readonly pendingActionsService: PendingActionsService,
+    private readonly hitlMatrixService: HitlMatrixService,
     private readonly auditService: AuditService,
+    private readonly metricsRepository: MetricsRepository,
     private readonly configService: ConfigService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis
   ) {}
@@ -58,8 +81,9 @@ export class AgentService implements OnModuleInit {
     }
 
     this.checkpointSaver = new RedisCheckpointSaver(this.redisClient);
+    this.modelName = 'gpt-4o-mini';
     this.llm = new ChatOpenAI({
-      model: 'gpt-4o-mini',
+      model: this.modelName,
       temperature: 0,
       maxTokens: 2048,
       timeout: 30000
@@ -177,12 +201,14 @@ export class AgentService implements OnModuleInit {
     records: ToolCallRecord[],
     conversationId: string,
     userId: string,
-    pendingConfirmations?: PendingAction[]
+    pendingConfirmations?: PendingAction[],
+    channel?: string
   ): Promise<ChatResponse> {
     const { warnings, flags } = await this.verificationService.runAll(
       agentResponse,
       records,
-      userId
+      userId,
+      channel
     );
     return {
       message: agentResponse,
@@ -194,6 +220,45 @@ export class AgentService implements OnModuleInit {
     };
   }
 
+  /** Persist request-level observability metrics. Best-effort — never throws. */
+  private _persistMetrics(
+    conversationId: string,
+    userId: string,
+    requestStart: number,
+    tokenAccumulator: TokenAccumulator,
+    records: ToolCallRecord[],
+    warnings: string[],
+    flags: string[],
+    channel?: string
+  ): void {
+    try {
+      const successCount = records.filter((r) => r.success).length;
+      const metrics: RequestMetrics = {
+        id: randomUUID(),
+        userId,
+        conversationId,
+        requestedAt: new Date(requestStart).toISOString(),
+        totalLatencyMs: Date.now() - requestStart,
+        tokensIn: tokenAccumulator.tokensIn,
+        tokensOut: tokenAccumulator.tokensOut,
+        estimatedCostUsd: estimateCostUsd(
+          this.modelName,
+          tokenAccumulator.tokensIn,
+          tokenAccumulator.tokensOut
+        ),
+        toolCallCount: records.length,
+        toolSuccessCount: successCount,
+        toolSuccessRate: records.length > 0 ? successCount / records.length : 1,
+        verifierWarningCount: warnings.length,
+        verifierFlagCount: flags.length,
+        channel
+      };
+      this.metricsRepository.insert(metrics);
+    } catch (err) {
+      this.logger.warn(`Failed to persist metrics: ${err}`);
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Public API
   // ---------------------------------------------------------------------------
@@ -203,6 +268,8 @@ export class AgentService implements OnModuleInit {
     userId: string,
     rawJwt: string
   ): Promise<ChatResponse> {
+    const requestStart = Date.now();
+    const tokenAccumulator = new TokenAccumulator();
     const conversationId = request.conversationId ?? randomUUID();
     const threadId = `${userId}:${conversationId}`;
 
@@ -215,7 +282,14 @@ export class AgentService implements OnModuleInit {
 
       const systemPrompt = buildSystemPrompt(
         { userId, currency, language, aiPromptContext },
-        ALL_TOOLS
+        ALL_TOOLS,
+        request.channel
+      );
+
+      const hitlMatrix = await this.hitlMatrixService.getMatrix(userId);
+      const autoApproveTools = this.hitlMatrixService.computeAutoApproveSet(
+        hitlMatrix,
+        this.toolRegistry.getAll()
       );
 
       const abortSignal = AbortSignal.timeout(30000);
@@ -223,7 +297,8 @@ export class AgentService implements OnModuleInit {
         userId,
         abortSignal,
         auth: { mode: 'user', jwt: rawJwt },
-        client: this.ghostfolioClient
+        client: this.ghostfolioClient,
+        autoApproveTools
       };
 
       const langchainTools = this._buildLangChainTools(toolContext, records);
@@ -231,7 +306,7 @@ export class AgentService implements OnModuleInit {
 
       const result = await agent.invoke(
         { messages: [new HumanMessage(request.message)] },
-        { configurable: { thread_id: threadId } }
+        { configurable: { thread_id: threadId }, callbacks: [tokenAccumulator] }
       );
 
       // Detect interrupt (HITL) — unique to chat()
@@ -274,12 +349,25 @@ export class AgentService implements OnModuleInit {
       }
 
       const agentResponse = this._extractLastMessage(result);
-      return await this._buildVerifiedResponse(
+      const chatResponse = await this._buildVerifiedResponse(
         agentResponse,
         records,
         conversationId,
-        userId
+        userId,
+        undefined,
+        request.channel
       );
+      this._persistMetrics(
+        conversationId,
+        userId,
+        requestStart,
+        tokenAccumulator,
+        records,
+        chatResponse.warnings,
+        chatResponse.flags,
+        request.channel
+      );
+      return chatResponse;
     } catch (err) {
       this.logger.error(`chat() error for user ${userId}: ${err}`);
       return {
@@ -348,13 +436,23 @@ export class AgentService implements OnModuleInit {
     });
 
     // LOCAL variable — never on `this` (cross-user data leak if class property)
+    const requestStart = Date.now();
+    const tokenAccumulator = new TokenAccumulator();
     const records: ToolCallRecord[] = [];
+
+    const hitlMatrix = await this.hitlMatrixService.getMatrix(userId);
+    const autoApproveTools = this.hitlMatrixService.computeAutoApproveSet(
+      hitlMatrix,
+      this.toolRegistry.getAll()
+    );
+
     const abortSignal = AbortSignal.timeout(30000);
     const toolContext: UserToolContext = {
       userId,
       abortSignal,
       auth: { mode: 'user', jwt: rawJwt },
-      client: this.ghostfolioClient
+      client: this.ghostfolioClient,
+      autoApproveTools
     };
 
     try {
@@ -369,16 +467,26 @@ export class AgentService implements OnModuleInit {
 
       const result = await agent.invoke(
         new Command({ resume: action.proposedParams }),
-        { configurable: { thread_id: threadId } }
+        { configurable: { thread_id: threadId }, callbacks: [tokenAccumulator] }
       );
 
       const agentResponse = this._extractLastMessage(result);
-      return await this._buildVerifiedResponse(
+      const chatResponse = await this._buildVerifiedResponse(
         agentResponse,
         records,
         conversationId,
         userId
       );
+      this._persistMetrics(
+        conversationId,
+        userId,
+        requestStart,
+        tokenAccumulator,
+        records,
+        chatResponse.warnings,
+        chatResponse.flags
+      );
+      return chatResponse;
     } catch (err) {
       this.logger.error(`resume() error for user ${userId}: ${err}`);
       return {

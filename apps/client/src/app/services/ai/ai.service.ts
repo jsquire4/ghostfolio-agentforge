@@ -18,11 +18,13 @@ export class AiService {
 
   public chat(
     message: string,
-    conversationId: string
+    conversationId: string,
+    channel = 'web-chat'
   ): Observable<ChatResponse> {
     return this.http.post<ChatResponse>('http://localhost:8000/api/v1/chat', {
       conversationId,
-      message
+      message,
+      channel
     });
   }
 }

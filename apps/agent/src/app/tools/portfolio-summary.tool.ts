@@ -12,6 +12,7 @@ export const portfolioSummaryTool: ToolDefinition = {
     'Retrieves a pre-formatted portfolio summary or analysis prompt from Ghostfolio. ' +
     'Use mode "analysis" for a detailed AI-ready analysis prompt, or "portfolio" for a concise portfolio overview.',
   category: 'read',
+  consequenceLevel: 'low',
   requiresConfirmation: false,
   timeout: 15000,
   schema: z.object({

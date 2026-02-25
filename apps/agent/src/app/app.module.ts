@@ -13,6 +13,7 @@ import { FeedbackModule } from './feedback/feedback.module';
 import { GhostfolioModule } from './ghostfolio/ghostfolio.module';
 import { HealthModule } from './health/health.module';
 import { InsightsModule } from './insights/insights.module';
+import { MetricsModule } from './metrics/metrics.module';
 import { RedisModule } from './redis/redis.module';
 import { ToolRegistryModule } from './tools/tool-registry.module';
 import { ToolsModule } from './tools/tools.module';
@@ -33,6 +34,7 @@ import { VerificationModule } from './verification/verification.module';
     FeedbackModule,
     HealthModule,
     InsightsModule,
+    MetricsModule,
     ToolsModule
   ],
   providers: [
