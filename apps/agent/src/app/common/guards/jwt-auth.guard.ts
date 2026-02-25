@@ -23,12 +23,20 @@ export class JwtAuthGuard implements CanActivate {
 
     const request = context.switchToHttp().getRequest<{
       headers: { authorization?: string };
+      query?: { token?: string };
+      url?: string;
       user?: AuthUser;
     }>();
     try {
-      const { userId, rawJwt } = extractUserId(
-        request.headers.authorization ?? ''
-      );
+      const authHeader = request.headers.authorization ?? '';
+
+      // JWT in query param is an SSE workaround (EventSource can't set headers).
+      // Limited to /evals/stream to reduce token exposure in logs.
+      const isSseEndpoint = request.url?.includes('/evals/stream');
+      const queryToken = isSseEndpoint ? (request.query?.token ?? '') : '';
+
+      const bearer = authHeader || (queryToken ? `Bearer ${queryToken}` : '');
+      const { userId, rawJwt } = extractUserId(bearer);
       request.user = { userId, rawJwt };
       return true;
     } catch {

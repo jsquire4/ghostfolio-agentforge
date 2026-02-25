@@ -1,3 +1,5 @@
+import { verify } from 'jsonwebtoken';
+
 export function extractUserId(authHeader: string): {
   userId: string;
   rawJwt: string;
@@ -11,27 +13,13 @@ export function extractUserId(authHeader: string): {
   }
 
   const rawJwt = authHeader.slice('Bearer '.length);
-  const segments = rawJwt.split('.');
 
-  if (segments.length !== 3) {
-    throw new Error('Malformed JWT: expected three dot-separated segments');
+  const secret = process.env.JWT_SECRET_KEY;
+  if (!secret) {
+    throw new Error('JWT_SECRET_KEY not configured');
   }
 
-  const payloadSegment = segments[1];
-
-  let payloadJson: string;
-  try {
-    payloadJson = Buffer.from(payloadSegment, 'base64').toString('utf8');
-  } catch {
-    throw new Error('Malformed JWT: payload segment is not valid base64');
-  }
-
-  let payload: Record<string, unknown>;
-  try {
-    payload = JSON.parse(payloadJson) as Record<string, unknown>;
-  } catch {
-    throw new Error('Malformed JWT: payload segment is not valid JSON');
-  }
+  const payload = verify(rawJwt, secret) as Record<string, unknown>;
 
   if (typeof payload['id'] !== 'string' || payload['id'] === '') {
     throw new Error(

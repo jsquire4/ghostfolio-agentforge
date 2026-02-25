@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 
+import { safeParseJson } from '../common/json.util';
 import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
 import { DatabaseService } from './database.service';
 
@@ -132,7 +133,9 @@ export class EvalsRepository {
       passed: row.passed === 1,
       durationMs: row.durationMs,
       error: row.error ?? undefined,
-      details: row.details ? JSON.parse(row.details) : undefined
+      details: row.details
+        ? (safeParseJson(row.details) as Record<string, unknown>)
+        : undefined
     };
   }
 }

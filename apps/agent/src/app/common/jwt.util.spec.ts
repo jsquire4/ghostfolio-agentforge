@@ -1,28 +1,24 @@
+import { sign } from 'jsonwebtoken';
+
 import { buildBearerHeader, extractUserId } from './jwt.util';
 
-// Pre-computed base64 payloads used to build synthetic JWTs.
-// Each payload is Base64(JSON.stringify(object)) — no padding stripped so
-// Buffer.from(..., 'base64') can decode them without ambiguity.
-//
-//   Buffer.from(JSON.stringify({ id: 'test-user-123' })).toString('base64')
-//   => 'eyJpZCI6InRlc3QtdXNlci0xMjMifQ=='
-//
-//   Buffer.from(JSON.stringify({ sub: 'test-user-123' })).toString('base64')
-//   => 'eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIn0='
-//
-//   Buffer.from(JSON.stringify({ name: 'no-id-field' })).toString('base64')
-//   => 'eyJuYW1lIjoibm8taWQtZmllbGQifQ=='
+const TEST_SECRET = 'test-secret-key-for-unit-tests';
 
-const HEADER_SEGMENT = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9';
-const SIGNATURE_SEGMENT = 'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c';
+beforeAll(() => {
+  process.env.JWT_SECRET_KEY = TEST_SECRET;
+});
 
-const PAYLOAD_WITH_ID = 'eyJpZCI6InRlc3QtdXNlci0xMjMifQ==';
-const PAYLOAD_WITH_SUB_ONLY = 'eyJzdWIiOiJ0ZXN0LXVzZXItMTIzIn0=';
-const PAYLOAD_NO_ID_FIELD = 'eyJuYW1lIjoibm8taWQtZmllbGQifQ==';
+afterAll(() => {
+  delete process.env.JWT_SECRET_KEY;
+});
 
-const VALID_JWT = `${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.${SIGNATURE_SEGMENT}`;
-const JWT_SUB_ONLY = `${HEADER_SEGMENT}.${PAYLOAD_WITH_SUB_ONLY}.${SIGNATURE_SEGMENT}`;
-const JWT_NO_ID = `${HEADER_SEGMENT}.${PAYLOAD_NO_ID_FIELD}.${SIGNATURE_SEGMENT}`;
+function signToken(payload: object): string {
+  return sign(payload, TEST_SECRET);
+}
+
+const VALID_JWT = signToken({ id: 'test-user-123' });
+const JWT_SUB_ONLY = signToken({ sub: 'test-user-123' });
+const JWT_NO_ID = signToken({ name: 'no-id-field' });
 
 describe('extractUserId', () => {
   it('returns correct userId and rawJwt for a valid Bearer token', () => {
@@ -37,18 +33,16 @@ describe('extractUserId', () => {
     expect(() => extractUserId('')).toThrow('Authorization header is missing');
   });
 
-  it('throws when the JWT has no dot separators (single segment)', () => {
-    const authHeader = 'Bearer notadottedjwtatall';
+  it('throws when the header does not use the Bearer scheme', () => {
+    const authHeader = `Basic dXNlcjpwYXNz`;
     expect(() => extractUserId(authHeader)).toThrow(
-      'Malformed JWT: expected three dot-separated segments'
+      'Authorization header must use Bearer scheme'
     );
   });
 
-  it('throws when the JWT has only two segments (missing signature)', () => {
-    const authHeader = `Bearer ${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}`;
-    expect(() => extractUserId(authHeader)).toThrow(
-      'Malformed JWT: expected three dot-separated segments'
-    );
+  it('throws when the header is "Bearer" with no token following it', () => {
+    const authHeader = 'Bearer ';
+    expect(() => extractUserId(authHeader)).toThrow();
   });
 
   it('throws when the payload has no `id` field (sub-only payload)', () => {
@@ -65,71 +59,33 @@ describe('extractUserId', () => {
     );
   });
 
-  it('throws when the header does not use the Bearer scheme', () => {
-    const authHeader = `Basic dXNlcjpwYXNz`;
-    expect(() => extractUserId(authHeader)).toThrow(
-      'Authorization header must use Bearer scheme'
-    );
-  });
-
-  it('throws when the header is "Bearer" with no token following it', () => {
-    // "Bearer " prefix present but no JWT segments
-    const authHeader = 'Bearer ';
-    expect(() => extractUserId(authHeader)).toThrow(
-      'Malformed JWT: expected three dot-separated segments'
-    );
-  });
-
-  it('throws when the payload segment is not valid JSON', () => {
-    // Valid base64 but invalid JSON: "eyJ7" decodes to "{"
-    const invalidJsonPayload = Buffer.from('{', 'utf8').toString('base64');
-    const authHeader = `Bearer ${HEADER_SEGMENT}.${invalidJsonPayload}.${SIGNATURE_SEGMENT}`;
-    expect(() => extractUserId(authHeader)).toThrow(
-      'Malformed JWT: payload segment is not valid JSON'
-    );
-  });
-
   it('throws when id field is empty string', () => {
-    const emptyIdPayload = Buffer.from(JSON.stringify({ id: '' })).toString(
-      'base64'
-    );
-    const jwt = `${HEADER_SEGMENT}.${emptyIdPayload}.${SIGNATURE_SEGMENT}`;
+    const jwt = signToken({ id: '' });
     expect(() => extractUserId(`Bearer ${jwt}`)).toThrow(
       'Malformed JWT: payload is missing the required `id` field'
     );
   });
 
-  it('throws when the JWT has four or more segments', () => {
-    const authHeader = `Bearer ${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.${SIGNATURE_SEGMENT}.extra`;
-    expect(() => extractUserId(authHeader)).toThrow(
-      'Malformed JWT: expected three dot-separated segments'
-    );
+  it('rejects tokens signed with a wrong secret', () => {
+    const badJwt = sign({ id: 'test-user-123' }, 'wrong-secret');
+    expect(() => extractUserId(`Bearer ${badJwt}`)).toThrow();
   });
 
-  it('throws when base64 decoding fails', () => {
-    const origFrom = Buffer.from;
-    // Mock Buffer.from to throw only for the payload segment decode
-    jest.spyOn(Buffer, 'from').mockImplementation((...args: any[]) => {
-      if (args[1] === 'base64') {
-        throw new Error('Invalid base64');
-      }
-      return origFrom.apply(Buffer, args as any);
-    });
-
-    expect(() =>
-      extractUserId(
-        `Bearer ${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.${SIGNATURE_SEGMENT}`
-      )
-    ).toThrow('Malformed JWT: payload segment is not valid base64');
-
-    jest.restoreAllMocks();
+  it('rejects tampered tokens', () => {
+    const tampered = VALID_JWT.replace(/.$/, 'X');
+    expect(() => extractUserId(`Bearer ${tampered}`)).toThrow();
   });
 
-  it('does not verify the signature — extracts userId from any well-formed JWT', () => {
-    const tampered = `${HEADER_SEGMENT}.${PAYLOAD_WITH_ID}.totally_invalid_signature`;
-    const result = extractUserId(`Bearer ${tampered}`);
-    expect(result.userId).toBe('test-user-123');
-    expect(result.rawJwt).toBe(tampered);
+  it('throws when JWT_SECRET_KEY is not configured', () => {
+    const saved = process.env.JWT_SECRET_KEY;
+    delete process.env.JWT_SECRET_KEY;
+    try {
+      expect(() => extractUserId(`Bearer ${VALID_JWT}`)).toThrow(
+        'JWT_SECRET_KEY not configured'
+      );
+    } finally {
+      process.env.JWT_SECRET_KEY = saved;
+    }
   });
 });
 

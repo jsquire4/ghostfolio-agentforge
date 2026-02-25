@@ -1,12 +1,47 @@
 {
   "portfolio_summary": {
-    "overlaps": ["market_data"],
-    "clusters": [],
-    "reason": "Hub tool — broad portfolio queries. 'How are my stocks doing' could route to either portfolio_summary or market_data."
+    "overlaps": ["market_data", "get_holdings", "get_dividends"],
+    "clusters": [
+      ["portfolio_summary", "get_holdings", "market_data"],
+      ["portfolio_summary", "get_holdings", "get_dividends"]
+    ],
+    "reason": "Hub tool — broad portfolio queries. 'How are my stocks doing' could route to portfolio_summary, get_holdings, or market_data. Income questions may overlap with get_dividends."
   },
   "market_data": {
-    "overlaps": ["portfolio_summary"],
-    "clusters": [],
-    "reason": "Vague queries about stocks/investments could route to market_data (prices) or portfolio_summary (allocation). Clear price/quote questions route here."
+    "overlaps": ["portfolio_summary", "get_holdings"],
+    "clusters": [["portfolio_summary", "get_holdings", "market_data"]],
+    "reason": "Vague queries about stocks/investments could route to market_data (prices), portfolio_summary (allocation), or get_holdings (positions). Clear price/quote questions route here."
+  },
+  "get_holdings": {
+    "overlaps": [
+      "portfolio_summary",
+      "market_data",
+      "get_dividends",
+      "check_wash_sale"
+    ],
+    "clusters": [
+      ["portfolio_summary", "get_holdings", "market_data"],
+      ["portfolio_summary", "get_holdings", "get_dividends"],
+      ["get_holdings", "check_wash_sale"]
+    ],
+    "reason": "Position-level detail overlaps with portfolio_summary on 'what do I own' queries. Dividend-paying holdings overlap with get_dividends. Wash sale checks naturally pair with holdings to show position context."
+  },
+  "get_dividends": {
+    "overlaps": ["portfolio_summary", "get_holdings"],
+    "clusters": [["portfolio_summary", "get_holdings", "get_dividends"]],
+    "reason": "Income/yield questions overlap with portfolio_summary on broad 'how is my portfolio doing'. 'Which holdings pay dividends' overlaps with get_holdings."
+  },
+  "check_wash_sale": {
+    "overlaps": ["get_holdings", "lookup_regulation"],
+    "clusters": [
+      ["get_holdings", "check_wash_sale"],
+      ["check_wash_sale", "lookup_regulation"]
+    ],
+    "reason": "Wash sale checks pair with get_holdings for position context and lookup_regulation for rule explanations. Tax/sell questions could route to either wash sale or holdings."
+  },
+  "lookup_regulation": {
+    "overlaps": ["check_wash_sale"],
+    "clusters": [["check_wash_sale", "lookup_regulation"]],
+    "reason": "Regulation lookup overlaps with check_wash_sale on tax rule questions. 'What is the wash sale rule' could go to either. Clear 'check my trades' routes to check_wash_sale; 'explain the rule' routes here."
   }
 }

@@ -1,18 +1,12 @@
-const fixturePayload = { id: 'fixture-user-1' };
-const encodedPayload = Buffer.from(JSON.stringify(fixturePayload)).toString(
-  'base64'
-);
-const fakeHeader = Buffer.from(
-  JSON.stringify({ alg: 'HS256', typ: 'JWT' })
-).toString('base64');
-const fakeSignature = 'fake-signature';
+import { sign } from 'jsonwebtoken';
 
-export const validJwt = `${fakeHeader}.${encodedPayload}.${fakeSignature}`;
+// Test fixtures use a well-known secret; set JWT_SECRET_KEY in test setup.
+export const FIXTURE_JWT_SECRET = 'fixture-jwt-secret-for-tests';
+
+const fixturePayload = { id: 'fixture-user-1' };
+export const validJwt = sign(fixturePayload, FIXTURE_JWT_SECRET);
 export const validAuthHeader = `Bearer ${validJwt}`;
 export const fixtureUserId = 'fixture-user-1';
 
 const noIdPayload = { sub: 'some-sub-value', name: 'Test User' };
-const encodedNoIdPayload = Buffer.from(JSON.stringify(noIdPayload)).toString(
-  'base64'
-);
-export const jwtWithoutId = `${fakeHeader}.${encodedNoIdPayload}.${fakeSignature}`;
+export const jwtWithoutId = sign(noIdPayload, FIXTURE_JWT_SECRET);

@@ -22,6 +22,7 @@ import { VerificationModule } from './verification/verification.module';
 @Module({
   imports: [
     ConfigModule.forRoot(),
+
     DatabaseModule,
     RedisModule,
     GhostfolioModule,

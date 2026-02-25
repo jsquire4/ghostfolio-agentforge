@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 
 import { RequestMetrics } from '../common/interfaces';
+import { ToolMetricsRecord } from '../common/storage.types';
 import { DatabaseService } from './database.service';
 
 export interface AggregateMetrics {
@@ -42,6 +43,57 @@ export class MetricsRepository {
       record.channel ?? null,
       record.langsmithRunId ?? null
     );
+  }
+
+  insertWithToolMetrics(
+    record: RequestMetrics,
+    toolRecords: ToolMetricsRecord[]
+  ): void {
+    const db = this.db.getDb();
+    const insertMetrics = db.prepare(
+      `INSERT INTO request_metrics (
+        id, userId, conversationId, requestedAt, totalLatencyMs,
+        tokensIn, tokensOut, estimatedCostUsd, toolCallCount,
+        toolSuccessCount, toolSuccessRate, verifierWarningCount,
+        verifierFlagCount, channel, langsmith_run_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+    );
+    const insertTool = db.prepare(
+      `INSERT INTO tool_metrics (id, requestMetricsId, toolName, calledAt, durationMs, success, error)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`
+    );
+
+    const txn = db.transaction(() => {
+      insertMetrics.run(
+        record.id,
+        record.userId,
+        record.conversationId,
+        record.requestedAt,
+        record.totalLatencyMs,
+        record.tokensIn,
+        record.tokensOut,
+        record.estimatedCostUsd,
+        record.toolCallCount,
+        record.toolSuccessCount,
+        record.toolSuccessRate,
+        record.verifierWarningCount,
+        record.verifierFlagCount,
+        record.channel ?? null,
+        record.langsmithRunId ?? null
+      );
+      for (const r of toolRecords) {
+        insertTool.run(
+          r.id,
+          r.requestMetricsId,
+          r.toolName,
+          r.calledAt,
+          r.durationMs,
+          r.success ? 1 : 0,
+          r.error ?? null
+        );
+      }
+    });
+    txn();
   }
 
   getByUser(userId: string, limit = 50, offset = 0): RequestMetrics[] {

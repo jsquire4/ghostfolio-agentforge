@@ -1,0 +1,178 @@
+<div class="eval-container">
+  <div class="eval-header">
+    <h3>Eval Dashboard</h3>
+    <div class="header-controls">
+      <mat-button-toggle-group
+        [value]="selectedTier"
+        (change)="onTierChange($event.value)"
+      >
+        <mat-button-toggle value="all">All</mat-button-toggle>
+        <mat-button-toggle value="golden">Golden</mat-button-toggle>
+        <mat-button-toggle value="labeled">Labeled</mat-button-toggle>
+      </mat-button-toggle-group>
+      <button
+        color="primary"
+        mat-flat-button
+        [disabled]="isRunning"
+        (click)="onRunEvals()"
+      >
+        @if (isRunning) {
+          Running...
+        } @else {
+          Run Evals
+        }
+      </button>
+    </div>
+  </div>
+
+  @if (isRunning) {
+    <mat-progress-bar mode="indeterminate" />
+  }
+
+  <div class="eval-body">
+    <div class="stats-panel">
+      <div class="stats-grid">
+        <div class="stat-card">
+          <span class="stat-label">Avg Latency</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0 && aggregateStats.avgLatency > 0
+              ? formatDuration(aggregateStats.avgLatency)
+              : '--'
+          }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg TTFT</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0 && aggregateStats.avgTtft > 0
+              ? formatDuration(aggregateStats.avgTtft)
+              : '--'
+          }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Cost</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0
+              ? formatCost(aggregateStats.totalCost)
+              : '--'
+          }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Avg Cost</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0
+              ? formatCost(aggregateStats.avgCost)
+              : '--'
+          }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Total Tokens</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0
+              ? formatTokens(aggregateStats.totalTokens)
+              : '--'
+          }}</span>
+        </div>
+        <div class="stat-card">
+          <span class="stat-label">Time Elapsed</span>
+          <span class="stat-value">{{
+            aggregateStats.caseCount > 0
+              ? formatDuration(aggregateStats.totalElapsed)
+              : '--'
+          }}</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="eval-results">
+      @if (errorMessage) {
+        <div class="error-banner">{{ errorMessage }}</div>
+      }
+
+      @if (liveResults.length > 0) {
+        <div class="live-results">
+          <h4>
+            Live Results
+            @if (isRunning) {
+              <span class="result-count">({{ liveResults.length }} cases)</span>
+            }
+          </h4>
+          <div class="results-scroll">
+            @for (result of liveResults; track result.caseId) {
+              <div
+                class="result-row"
+                [class.failed]="!result.passed"
+                [class.passed]="result.passed"
+              >
+                <span class="status-icon">{{
+                  result.passed ? '\u2713' : '\u2717'
+                }}</span>
+                <span class="case-id">{{ result.caseId }}</span>
+                <span class="description">{{ result.description }}</span>
+                <span class="duration">{{
+                  formatDuration(result.durationMs)
+                }}</span>
+                @if (result.estimatedCost) {
+                  <span class="cost">{{
+                    formatCost(result.estimatedCost)
+                  }}</span>
+                }
+              </div>
+              @if (!result.passed && result.error) {
+                <div class="result-error">{{ result.error }}</div>
+              }
+            }
+          </div>
+        </div>
+      }
+
+      @if (runSummary) {
+        <div class="run-summary">
+          <h4>Run Summary</h4>
+          <div class="summary-stats">
+            <span class="stat passed">{{ runSummary.totalPassed }} passed</span>
+            <span class="stat failed">{{ runSummary.totalFailed }} failed</span>
+            <span class="stat">{{
+              formatDuration(runSummary.totalDurationMs)
+            }}</span>
+            <span class="stat">{{ formatCost(runSummary.estimatedCost) }}</span>
+          </div>
+          @if (runSummary.reportUrl) {
+            <button mat-flat-button (click)="openReport(runSummary.reportUrl)">
+              View Report
+            </button>
+          }
+        </div>
+      }
+
+      @if (historicalRuns.length > 0) {
+        <div class="historical-runs">
+          <h4>Recent Runs</h4>
+          <table class="runs-table">
+            <thead>
+              <tr>
+                <th>Tier</th>
+                <th>Passed</th>
+                <th>Failed</th>
+                <th>Duration</th>
+                <th>Cost</th>
+                <th>Date</th>
+              </tr>
+            </thead>
+            <tbody>
+              @for (run of historicalRuns; track run.id) {
+                <tr>
+                  <td>{{ run.tier }}</td>
+                  <td class="passed">{{ run.totalPassed }}</td>
+                  <td class="failed">{{ run.totalFailed }}</td>
+                  <td>{{ formatDuration(run.totalDurationMs) }}</td>
+                  <td>{{ formatCost(run.estimatedCost) }}</td>
+                  <td>{{ run.runAt | date: 'short' }}</td>
+                </tr>
+              }
+            </tbody>
+          </table>
+        </div>
+      }
+    </div>
+  </div>
+</div>

@@ -2,7 +2,7 @@
   @if (isOpen) {
     <div class="chat-panel">
       <div class="chat-header">
-        <span i18n>AI Assistant</span>
+        <span>AI Assistant</span>
         <button class="close-btn" mat-icon-button (click)="toggleOpen()">
           <ion-icon name="close-outline" />
         </button>
@@ -26,7 +26,7 @@
         }
         @if (messages.length === 0 && !isLoading) {
           <div class="empty-state">
-            <p i18n>Ask anything about your portfolio.</p>
+            <p>Ask anything about your portfolio.</p>
           </div>
         }
         @if (isLoading) {
@@ -40,7 +40,6 @@
         <mat-form-field appearance="outline" class="w-100">
           <input
             #messageInput
-            i18n-placeholder
             matInput
             placeholder="Ask about your portfolio..."
             [(ngModel)]="inputText"

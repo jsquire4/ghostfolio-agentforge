@@ -4,6 +4,10 @@ import { ToolCallRecord } from '../common/interfaces';
 import type { Verifier } from '../common/interfaces';
 import { ALL_VERIFIERS } from './index';
 
+// ARCHITECTURE NOTE: Verification runs post-hoc (after tool execution).
+// It can add warnings/flags to the response but cannot prevent side effects
+// from write tools. Write-tool safety depends on HITL gating in
+// agent.service._buildLangChainTools() — verification is a second layer.
 export const VERIFIERS_OVERRIDE = 'VERIFIERS_OVERRIDE';
 
 export interface VerificationPipelineResult {

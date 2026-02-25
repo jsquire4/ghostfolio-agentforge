@@ -58,6 +58,21 @@
           >Accounts</a
         >
       </li>
+      <!-- NOTE: Agent link is visible to all authenticated users (no role guard).
+           In production, gate behind a permission check like hasPermissionToAccessAdminControl. -->
+      <li class="list-inline-item">
+        <a
+          class="d-none d-sm-block"
+          mat-flat-button
+          [ngClass]="{
+            'font-weight-bold': currentRoute === internalRoutes.agent.path,
+            'text-decoration-underline':
+              currentRoute === internalRoutes.agent.path
+          }"
+          [routerLink]="routerLinkAgent"
+          >Agent</a
+        >
+      </li>
       @if (hasPermissionToAccessAdminControl) {
         <li class="list-inline-item">
           <a
@@ -275,6 +290,15 @@
             }"
             [routerLink]="routerLinkAccount"
             >My Ghostfolio</a
+          >
+          <a
+            class="d-flex d-sm-none"
+            mat-menu-item
+            [ngClass]="{
+              'font-weight-bold': currentRoute === internalRoutes.agent.path
+            }"
+            [routerLink]="routerLinkAgent"
+            >Agent</a
           >
           @if (hasPermissionToAccessAdminControl) {
             <a

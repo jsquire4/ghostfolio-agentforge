@@ -11,7 +11,10 @@ import { join } from 'path';
 import request from 'supertest';
 
 import { makeChatResponse } from '../../../test-fixtures';
-import { validAuthHeader } from '../../../test-fixtures/jwt.fixture';
+import {
+  FIXTURE_JWT_SECRET,
+  validAuthHeader
+} from '../../../test-fixtures/jwt.fixture';
 import { ActionsController } from '../../actions/actions.controller';
 import { AgentService } from '../../agent/agent.service';
 import { HitlMatrixService } from '../../agent/hitl-matrix.service';
@@ -69,6 +72,14 @@ describe('Agent API (integration)', () => {
   let app: INestApplication;
   let tmpDir: string;
 
+  beforeAll(() => {
+    process.env.JWT_SECRET_KEY = FIXTURE_JWT_SECRET;
+  });
+
+  afterAll(() => {
+    delete process.env.JWT_SECRET_KEY;
+  });
+
   const mockAgentService = {
     chat: jest
       .fn()
@@ -81,6 +92,7 @@ describe('Agent API (integration)', () => {
   const mockRedis = {
     get: jest.fn(),
     set: jest.fn(),
+    quit: jest.fn().mockResolvedValue('OK'),
     del: jest.fn(),
     hgetall: jest.fn(),
     hget: jest.fn(),
@@ -243,15 +255,18 @@ describe('Agent API (integration)', () => {
   });
 
   describe('POST /api/v1/actions/:id', () => {
+    const validActionId = '00000000-0000-0000-0000-000000000123';
+    const validRejectId = '00000000-0000-0000-0000-000000000456';
+
     it('approve returns 201 with valid auth', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/actions/action-123/approve')
+        .post(`/api/v1/actions/${validActionId}/approve`)
         .set('Authorization', validAuthHeader)
         .expect(201);
 
       expect(res.body).toHaveProperty('message');
       expect(mockAgentService.resume).toHaveBeenCalledWith(
-        'action-123',
+        validActionId,
         true,
         expect.any(String),
         expect.any(String)
@@ -260,13 +275,13 @@ describe('Agent API (integration)', () => {
 
     it('reject returns 201 with valid auth', async () => {
       const res = await request(app.getHttpServer())
-        .post('/api/v1/actions/action-456/reject')
+        .post(`/api/v1/actions/${validRejectId}/reject`)
         .set('Authorization', validAuthHeader)
         .expect(201);
 
       expect(res.body).toHaveProperty('message');
       expect(mockAgentService.resume).toHaveBeenCalledWith(
-        'action-456',
+        validRejectId,
         false,
         expect.any(String),
         expect.any(String)

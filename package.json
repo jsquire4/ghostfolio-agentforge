@@ -102,6 +102,7 @@
     "@nestjs/platform-express": "11.1.14",
     "@nestjs/schedule": "6.1.1",
     "@nestjs/serve-static": "5.0.4",
+    "@nestjs/throttler": "^6.5.0",
     "@openrouter/ai-sdk-provider": "0.7.2",
     "@prisma/client": "6.19.0",
     "@simplewebauthn/browser": "13.2.2",

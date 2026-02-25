@@ -4,11 +4,13 @@ import {
   Get,
   Param,
   ParseIntPipe,
-  Query
+  Query,
+  UseGuards
 } from '@nestjs/common';
 
 import { AuthUser } from '../common/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { AdminGuard } from '../common/guards/admin.guard';
 import { RequestMetrics } from '../common/interfaces';
 import { ToolMetricsRecord } from '../common/storage.types';
 import {
@@ -33,7 +35,11 @@ export class MetricsController {
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number,
     @Query('offset', new DefaultValuePipe(0), ParseIntPipe) offset: number
   ): RequestMetrics[] {
-    return this.metricsRepository.getByUser(user.userId, limit, offset);
+    return this.metricsRepository.getByUser(
+      user.userId,
+      Math.min(limit, 100),
+      offset
+    );
   }
 
   @Get('summary')
@@ -42,20 +48,29 @@ export class MetricsController {
   }
 
   @Get('admin/summary')
+  @UseGuards(AdminGuard)
   public getAdminSummary(): AggregateMetrics {
     return this.metricsRepository.getAggregateAll();
   }
 
   @Get('tools')
+  @UseGuards(AdminGuard)
   public getToolSummary(): ToolSummary[] {
     return this.toolMetricsRepository.getToolSummary();
   }
 
   @Get('tools/:toolName')
+  @UseGuards(AdminGuard)
   public getToolPerformance(
     @Param('toolName') toolName: string,
     @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit: number
   ): ToolMetricsRecord[] {
-    return this.toolMetricsRepository.getToolPerformance(toolName, limit);
+    if (!/^[a-z_-]{1,50}$/.test(toolName)) {
+      return [];
+    }
+    return this.toolMetricsRepository.getToolPerformance(
+      toolName,
+      Math.min(limit, 100)
+    );
   }
 }

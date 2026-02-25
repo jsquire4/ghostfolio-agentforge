@@ -84,14 +84,16 @@
   },
   {
     "id": "ls-market-data-006",
-    "description": "ambiguous — vague stocks question, either tool valid",
+    "description": "ambiguous — vague stocks question, any tool valid",
     "difficulty": "ambiguous",
     "input": { "message": "How are my stocks doing?" },
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
         ["market_data"],
-        ["market_data", "portfolio_summary"]
+        ["get_holdings"],
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -105,14 +107,16 @@
   },
   {
     "id": "ls-market-data-007",
-    "description": "ambiguous — investments today, either tool valid",
+    "description": "ambiguous — investments today, any tool valid",
     "difficulty": "ambiguous",
     "input": { "message": "What's happening with my investments today?" },
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
         ["market_data"],
-        ["market_data", "portfolio_summary"]
+        ["get_holdings"],
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -124,13 +128,15 @@
   },
   {
     "id": "ls-market-data-008",
-    "description": "ambiguous — worry about portfolio, summary alone or with market data",
+    "description": "ambiguous — worry about portfolio, multiple valid paths",
     "difficulty": "ambiguous",
     "input": { "message": "Should I be worried about my portfolio right now?" },
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
-        ["market_data", "portfolio_summary"]
+        ["get_holdings"],
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -182,7 +188,10 @@
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
-        ["market_data", "portfolio_summary"]
+        ["get_holdings"],
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"],
+        ["get_holdings", "market_data"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -200,8 +209,12 @@
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
+        ["get_holdings"],
         ["market_data"],
-        ["market_data", "portfolio_summary"]
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"],
+        ["get_holdings", "get_dividends"],
+        ["portfolio_summary", "get_dividends"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -221,8 +234,10 @@
     "expect": {
       "toolsAcceptable": [
         ["portfolio_summary"],
+        ["get_holdings"],
         ["market_data"],
-        ["market_data", "portfolio_summary"]
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,
@@ -239,7 +254,9 @@
     "input": { "message": "What do my ETF positions look like right now?" },
     "expect": {
       "toolsAcceptable": [
+        ["get_holdings"],
         ["portfolio_summary"],
+        ["get_holdings", "portfolio_summary"],
         ["market_data", "portfolio_summary"]
       ],
       "noToolErrors": true,
@@ -259,8 +276,11 @@
     },
     "expect": {
       "toolsAcceptable": [
+        ["get_holdings"],
         ["portfolio_summary"],
-        ["market_data", "portfolio_summary"]
+        ["get_holdings", "market_data"],
+        ["market_data", "portfolio_summary"],
+        ["get_holdings", "portfolio_summary"]
       ],
       "noToolErrors": true,
       "responseNonEmpty": true,

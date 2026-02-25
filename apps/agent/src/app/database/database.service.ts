@@ -30,6 +30,8 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
   public constructor(private readonly configService: ConfigService) {}
 
   public onModuleInit(): void {
+    // NOTE: Default path './data/insights.db' is relative to CWD.
+    // In Docker, CWD is set via WORKDIR. For other deployments, set AGENT_DB_PATH explicitly.
     const dbPath = this.configService.get<string>(
       'AGENT_DB_PATH',
       './data/insights.db'
@@ -39,6 +41,7 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
 
     this.db = new Database(dbPath);
     this.db.pragma('journal_mode = WAL');
+    this.db.pragma('busy_timeout = 5000');
 
     this._createTables(this.db);
     this._runMigrations(this.db);

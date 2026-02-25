@@ -168,13 +168,13 @@ describe('marketDataTool', () => {
       mockContext as any
     );
 
-    expect(result.error).toBe('Connection refused');
+    expect(result.error).toBe('Failed to fetch data from portfolio service');
     expect(result.tool).toBe('market_data');
     expect(result.fetchedAt).toBeDefined();
     expect(result.data).toBeUndefined();
   });
 
-  it('returns stringified error when rejection is not an Error', async () => {
+  it('returns sanitized error when rejection is not an Error', async () => {
     mockClient.get.mockRejectedValue('upstream timeout');
 
     const result = await marketDataTool.execute(
@@ -182,7 +182,7 @@ describe('marketDataTool', () => {
       mockContext as any
     );
 
-    expect(result.error).toBe('upstream timeout');
+    expect(result.error).toBe('Failed to fetch data from portfolio service');
   });
 
   it('returns cancellation error when abortSignal is already aborted', async () => {
@@ -213,5 +213,116 @@ describe('marketDataTool', () => {
     );
 
     expect((result.data as any).symbols[0].historicalData).toBeUndefined();
+  });
+
+  it('prefers exact YAHOO symbol match over CoinGecko results', async () => {
+    const mixedLookup = {
+      items: [
+        {
+          symbol: 'backed-nvidia',
+          name: 'Backed NVIDIA',
+          currency: 'USD',
+          dataSource: 'COINGECKO'
+        },
+        {
+          symbol: 'dinari-nvda',
+          name: 'Dinari NVDA',
+          currency: 'USD',
+          dataSource: 'COINGECKO'
+        },
+        {
+          symbol: 'NVDA',
+          name: 'NVIDIA Corporation',
+          currency: 'USD',
+          dataSource: 'YAHOO'
+        }
+      ]
+    };
+
+    mockClient.get
+      .mockResolvedValueOnce(mixedLookup)
+      .mockResolvedValueOnce(fakeSymbolResponse);
+
+    const result = await marketDataTool.execute(
+      { symbols: ['NVDA'] },
+      mockContext as any
+    );
+
+    expect(result.error).toBeUndefined();
+    expect((result.data as any).symbols[0].symbol).toBe('NVDA');
+    expect((result.data as any).symbols[0].dataSource).toBe('YAHOO');
+    expect(mockClient.get).toHaveBeenCalledWith(
+      '/api/v1/symbol/YAHOO/NVDA',
+      mockContext.auth
+    );
+  });
+
+  it('falls back to any YAHOO result when no exact symbol match', async () => {
+    const mixedLookup = {
+      items: [
+        {
+          symbol: 'backed-tesla',
+          name: 'Backed Tesla',
+          currency: 'USD',
+          dataSource: 'COINGECKO'
+        },
+        {
+          symbol: 'TSLA',
+          name: 'Tesla Inc',
+          currency: 'USD',
+          dataSource: 'YAHOO'
+        }
+      ]
+    };
+
+    mockClient.get.mockResolvedValueOnce(mixedLookup).mockResolvedValueOnce({
+      ...fakeSymbolResponse,
+      symbol: 'TSLA',
+      marketPrice: 250.0
+    });
+
+    const result = await marketDataTool.execute(
+      { symbols: ['TSLA'] },
+      mockContext as any
+    );
+
+    expect(result.error).toBeUndefined();
+    expect((result.data as any).symbols[0].symbol).toBe('TSLA');
+    expect(mockClient.get).toHaveBeenCalledWith(
+      '/api/v1/symbol/YAHOO/TSLA',
+      mockContext.auth
+    );
+  });
+
+  it('uses CoinGecko result when no YAHOO results exist', async () => {
+    const cryptoOnlyLookup = {
+      items: [
+        {
+          symbol: 'bitcoin',
+          name: 'Bitcoin',
+          currency: 'USD',
+          dataSource: 'COINGECKO'
+        }
+      ]
+    };
+
+    mockClient.get
+      .mockResolvedValueOnce(cryptoOnlyLookup)
+      .mockResolvedValueOnce({
+        dataSource: 'COINGECKO',
+        symbol: 'bitcoin',
+        currency: 'USD',
+        marketPrice: 65000,
+        historicalData: []
+      });
+
+    const result = await marketDataTool.execute(
+      { symbols: ['BTC'] },
+      mockContext as any
+    );
+
+    expect(result.error).toBeUndefined();
+    expect((result.data as any).symbols[0].symbol).toBe('bitcoin');
+    expect((result.data as any).symbols[0].dataSource).toBe('COINGECKO');
   });
 });

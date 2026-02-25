@@ -9,8 +9,9 @@ import {
 export const portfolioSummaryTool: ToolDefinition = {
   name: 'portfolio_summary',
   description:
-    'Retrieves a pre-formatted portfolio summary or analysis prompt from Ghostfolio. ' +
-    'Use mode "analysis" for a detailed AI-ready analysis prompt, or "portfolio" for a concise portfolio overview.',
+    'Retrieves a high-level portfolio summary from Ghostfolio — total value, cash balance, net P&L, and overall performance. ' +
+    'Use when the user asks about overall portfolio performance, total value, or how their portfolio is doing in aggregate. ' +
+    'For individual position details, share counts, or per-security data, use get_holdings instead.',
   category: 'read',
   consequenceLevel: 'low',
   requiresConfirmation: false,
@@ -49,10 +50,12 @@ export const portfolioSummaryTool: ToolDefinition = {
         data: { prompt: data.prompt, mode }
       };
     } catch (err) {
+      // Log full error for debugging; return sanitized message to LLM
+      console.error(`[portfolio_summary] ${err}`);
       return {
         tool: 'portfolio_summary',
         fetchedAt: new Date().toISOString(),
-        error: err instanceof Error ? err.message : String(err)
+        error: 'Failed to fetch data from portfolio service'
       };
     }
   }

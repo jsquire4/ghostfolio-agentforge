@@ -1,5 +1,11 @@
-import { Body, Controller, Param, Post } from '@nestjs/common';
-import { IsIn, IsOptional, IsString } from 'class-validator';
+import {
+  BadRequestException,
+  Body,
+  Controller,
+  Param,
+  Post
+} from '@nestjs/common';
+import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { randomUUID } from 'crypto';
 
 import { AuthUser } from '../common/auth.types';
@@ -12,6 +18,7 @@ export class FeedbackDto {
 
   @IsOptional()
   @IsString()
+  @MaxLength(5000)
   correction?: string;
 }
 
@@ -25,6 +32,15 @@ export class FeedbackController {
     @Body() body: FeedbackDto,
     @CurrentUser() user: AuthUser
   ): { ok: true } {
+    // conversationId is user-provided (currently = userId). Cap length and sanitize.
+    if (
+      !conversationId ||
+      conversationId.length > 100 ||
+      !/^[\w-]+$/.test(conversationId)
+    ) {
+      throw new BadRequestException('Invalid conversationId');
+    }
+
     this.feedbackRepository.log({
       id: randomUUID(),
       userId: user.userId,

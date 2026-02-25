@@ -49,15 +49,15 @@ describe('portfolioSummaryTool', () => {
     expect(mockContext.client.get).not.toHaveBeenCalled();
   });
 
-  it('returns error message on client failure', async () => {
+  it('returns sanitized error message on client failure', async () => {
     mockContext.client.get.mockRejectedValue(new Error('Network error'));
     const result = await portfolioSummaryTool.execute({}, mockContext as any);
-    expect(result.error).toBe('Network error');
+    expect(result.error).toBe('Failed to fetch data from portfolio service');
   });
 
-  it('returns stringified error when rejection is not an Error', async () => {
+  it('returns sanitized error when rejection is not an Error', async () => {
     mockContext.client.get.mockRejectedValue('string error');
     const result = await portfolioSummaryTool.execute({}, mockContext as any);
-    expect(result.error).toBe('string error');
+    expect(result.error).toBe('Failed to fetch data from portfolio service');
   });
 });

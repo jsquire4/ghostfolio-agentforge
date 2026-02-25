@@ -40,6 +40,15 @@ export class ChatController {
     @CurrentUser() user: AuthUser,
     @Headers('x-eval-case-id') evalCaseId?: string
   ): Promise<ChatResponse> {
-    return this.agentService.chat(body, user.userId, user.rawJwt, evalCaseId);
+    // Sanitize evalCaseId header to prevent injection
+    const sanitizedEvalCaseId = evalCaseId
+      ? evalCaseId.replace(/[^a-zA-Z0-9\-_]/g, '').slice(0, 100)
+      : undefined;
+    return this.agentService.chat(
+      body,
+      user.userId,
+      user.rawJwt,
+      sanitizedEvalCaseId
+    );
   }
 }

@@ -1,0 +1,27 @@
+:host {
+  // Override the global .page styles — agent dashboard must fill the
+  // viewport exactly so panels scroll internally, not the page itself.
+  height: calc(100svh - var(--mat-toolbar-standard-height));
+  overflow: hidden;
+  padding: 0 !important;
+}
+
+.agent-dashboard {
+  box-sizing: border-box;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: 1fr 1fr;
+  height: 100%;
+  padding: 1rem;
+
+  @media (max-width: 960px) {
+    grid-template-columns: 1fr;
+    grid-template-rows: 1fr 1fr;
+  }
+}
+
+.chat-panel,
+.eval-panel {
+  min-height: 0;
+  overflow: hidden;
+}

@@ -8,6 +8,9 @@ import {
 } from '../common/interfaces';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 
+// SECURITY NOTE: HITL matrix in Redis has no integrity check (HMAC).
+// If Redis is compromised, auto-approve settings can be tampered with.
+// Accepted risk: Redis access should be network-isolated in production.
 const REDIS_KEY_PREFIX = 'hitl:matrix:';
 const TTL_SECONDS = 30 * 24 * 60 * 60; // 30 days
 

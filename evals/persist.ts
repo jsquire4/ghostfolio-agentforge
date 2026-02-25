@@ -9,6 +9,14 @@ import Database from 'better-sqlite3';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 
+function safeJsonParse(value: string): unknown {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return undefined;
+  }
+}
+
 const EVAL_DDL = `
   CREATE TABLE IF NOT EXISTS eval_runs (
     id               TEXT PRIMARY KEY,
@@ -41,6 +49,7 @@ function openDb(dbPath: string): Database.Database {
   mkdirSync(dirname(dbPath), { recursive: true });
   const db = new Database(dbPath);
   db.pragma('journal_mode = WAL');
+  db.pragma('busy_timeout = 5000');
   db.exec(EVAL_DDL);
   return db;
 }
@@ -139,7 +148,9 @@ export function getCaseResultsForRun(
       passed: row.passed === 1,
       durationMs: row.durationMs,
       error: row.error ?? undefined,
-      details: row.details ? JSON.parse(row.details) : undefined
+      details: row.details
+        ? (safeJsonParse(row.details) as Record<string, unknown>)
+        : undefined
     }));
   } finally {
     db.close();

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "gs-get-dividends-001",
+    "description": "trigger phrase — direct dividend question",
+    "input": { "message": "What dividends have I earned?" },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.equities[2]}}"
+      ],
+      "responseContainsAny": [["dividend", "distribution", "payout"]],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-002",
+    "description": "trigger phrase — total dividend income",
+    "input": { "message": "How much dividend income have I received?" },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:totals.dividends}}"],
+      "responseContainsAny": [
+        ["dividend", "distribution", "income"],
+        ["total", "combined", "altogether", "received"]
+      ],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-003",
+    "description": "trigger phrase — dividend history",
+    "input": { "message": "Show me my dividend history" },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.etfs[0]}}"
+      ],
+      "responseContainsAny": [
+        ["dividend", "distribution", "payout", "payment"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-004",
+    "description": "rephrased — casual wording",
+    "input": { "message": "Have any of my stocks paid me dividends?" },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.equities[2]}}"
+      ],
+      "responseContainsAny": [["dividend", "distribution", "payout", "paid"]],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-005",
+    "description": "rephrased — yield and distributions",
+    "input": {
+      "message": "What distributions have I received from my holdings?"
+    },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [["dividend", "distribution", "payout"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-006",
+    "description": "no raw JSON leak",
+    "input": { "message": "List all my dividend payments" },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined",
+        "investment"
+      ],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-dividends-007",
+    "description": "disambiguation — dividends not portfolio summary",
+    "input": {
+      "message": "How much income have my investments generated in dividends?"
+    },
+    "expect": {
+      "toolsCalled": ["get_dividends"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:totals.dividends}}"],
+      "responseContainsAny": [["dividend", "distribution", "income"]],
+      "responseNotContains": ["I don't know"],
+      "maxLatencyMs": 30000
+    }
+  }
+]

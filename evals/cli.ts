@@ -33,6 +33,26 @@ import {
   EvalSuiteResult
 } from './types';
 
+// ── SSE Event Emission (for NestJS EvalRunnerService) ──────
+
+function emitSseEvent(event: {
+  type: string;
+  data: Record<string, unknown>;
+}): void {
+  if (process.env.EVAL_SSE_MODE === '1') {
+    process.stdout.write('EVAL_JSON:' + JSON.stringify(event) + '\n');
+  }
+}
+
+function aggregateSuites(suites: EvalSuiteResult[]): Record<string, unknown> {
+  return {
+    totalPassed: suites.reduce((s, r) => s + r.totalPassed, 0),
+    totalFailed: suites.reduce((s, r) => s + r.totalFailed, 0),
+    totalDurationMs: suites.reduce((s, r) => s + r.totalDurationMs, 0),
+    estimatedCost: suites.reduce((s, r) => s + (r.estimatedCost || 0), 0)
+  };
+}
+
 // ── ANSI Helpers ────────────────────────────────────────────
 
 const BOLD = '\x1b[1m';
@@ -240,6 +260,36 @@ async function cmdGolden(
 ): Promise<EvalSuiteResult> {
   const suite = await runGoldenEvals(tool, snapshot);
   printGoldenResults(suite);
+
+  // Emit SSE events for each case + suite aggregate
+  for (const c of suite.cases) {
+    emitSseEvent({
+      type: 'case_result',
+      data: {
+        caseId: c.id,
+        description: c.description,
+        passed: c.passed,
+        durationMs: c.durationMs,
+        tier: 'golden',
+        tokens: (c.details?.tokens as number) ?? undefined,
+        estimatedCost: (c.details?.estimatedCost as number) ?? undefined,
+        ttftMs: (c.details?.ttftMs as number) ?? undefined,
+        latencyMs: (c.details?.latencyMs as number) ?? undefined,
+        error: c.error ?? undefined
+      }
+    });
+  }
+  emitSseEvent({
+    type: 'suite_complete',
+    data: {
+      tier: 'golden',
+      totalPassed: suite.totalPassed,
+      totalFailed: suite.totalFailed,
+      totalDurationMs: suite.totalDurationMs,
+      estimatedCost: suite.estimatedCost ?? 0
+    }
+  });
+
   return suite;
 }
 
@@ -251,6 +301,36 @@ async function cmdLabeled(
 ): Promise<EvalSuiteResult> {
   const suite = await runLabeledEvals(difficulty, tool, cap, snapshot);
   printLabeledResults(suite);
+
+  // Emit SSE events for each case + suite aggregate
+  for (const c of suite.cases) {
+    emitSseEvent({
+      type: 'case_result',
+      data: {
+        caseId: c.id,
+        description: c.description,
+        passed: c.passed,
+        durationMs: c.durationMs,
+        tier: 'labeled',
+        tokens: (c.details?.tokens as number) ?? undefined,
+        estimatedCost: (c.details?.estimatedCost as number) ?? undefined,
+        ttftMs: (c.details?.ttftMs as number) ?? undefined,
+        latencyMs: (c.details?.latencyMs as number) ?? undefined,
+        error: c.error ?? undefined
+      }
+    });
+  }
+  emitSseEvent({
+    type: 'suite_complete',
+    data: {
+      tier: 'labeled',
+      totalPassed: suite.totalPassed,
+      totalFailed: suite.totalFailed,
+      totalDurationMs: suite.totalDurationMs,
+      estimatedCost: suite.estimatedCost ?? 0
+    }
+  });
+
   return suite;
 }
 
@@ -564,6 +644,16 @@ async function main(): Promise<void> {
     console.log(`    JSON: ${jsonPath}`);
     console.log(`    HTML: ${htmlPath}`);
 
+    // Emit run_complete with report URL for SSE consumers
+    const htmlFilename = htmlPath.split('/').pop();
+    emitSseEvent({
+      type: 'run_complete',
+      data: {
+        ...aggregateSuites(suites),
+        reportUrl: `/reports/${htmlFilename}`
+      }
+    });
+
     // Auto-open HTML report in default browser
     const openCmd = platform() === 'darwin' ? 'open' : 'xdg-open';
     try {
@@ -577,11 +667,23 @@ async function main(): Promise<void> {
     );
   }
 
+  // Emit run_complete for non-report runs (report runs emit above)
+  if (!wantsReport || !snapshot) {
+    emitSseEvent({
+      type: 'run_complete',
+      data: aggregateSuites(suites)
+    });
+  }
+
   const anyFailed = suites.some((s) => s.totalFailed > 0);
   process.exit(anyFailed || hasNewRegressions ? 1 : 0);
 }
 
 main().catch((err) => {
+  emitSseEvent({
+    type: 'run_error',
+    data: { error: err.message || String(err) }
+  });
   console.error(`${RED}Fatal error:${RESET} ${err.message || err}`);
   process.exit(1);
 });

@@ -12,6 +12,8 @@ export interface ChatResponse {
   message: string;
 }
 
+// TODO: Replace hardcoded localhost:8000 with environment-injectable config
+// when deploying beyond local development.
 @Injectable({ providedIn: 'root' })
 export class AiService {
   public constructor(private http: HttpClient) {}

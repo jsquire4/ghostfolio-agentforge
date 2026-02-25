@@ -68,7 +68,8 @@ export const marketDataTool: ToolDefinition = {
     symbols: z
       .array(z.string())
       .min(1)
-      .describe('One or more ticker symbols, e.g. ["NVDA", "META"]'),
+      .max(10)
+      .describe('One or more ticker symbols (max 10), e.g. ["NVDA", "META"]'),
     range: z
       .enum(['1d', '1w', '1m', '3m', '6m', '1y', '5y', 'max'])
       .optional()
@@ -122,12 +123,20 @@ export const marketDataTool: ToolDefinition = {
           continue;
         }
 
-        const match = lookup.items[0];
+        // Prefer exact symbol match from YAHOO over CoinGecko crypto tokens
+        const upperTicker = ticker.toUpperCase();
+        const match =
+          lookup.items.find(
+            (i) =>
+              i.symbol.toUpperCase() === upperTicker && i.dataSource === 'YAHOO'
+          ) ??
+          lookup.items.find((i) => i.dataSource === 'YAHOO') ??
+          lookup.items[0];
         const days = range ? (RANGE_TO_DAYS[range] ?? 0) : 0;
         const histParam = days > 0 ? `?includeHistoricalData=${days}` : '';
 
         const symbolData = await context.client.get<SymbolResponse>(
-          `/api/v1/symbol/${match.dataSource}/${encodeURIComponent(match.symbol)}${histParam}`,
+          `/api/v1/symbol/${encodeURIComponent(match.dataSource)}/${encodeURIComponent(match.symbol)}${histParam}`,
           context.auth
         );
 
@@ -156,10 +165,12 @@ export const marketDataTool: ToolDefinition = {
         data: { symbols: results, range: range ?? null }
       };
     } catch (err) {
+      // Log full error for debugging; return sanitized message to LLM
+      console.error(`[market_data] ${err}`);
       return {
         tool: 'market_data',
         fetchedAt: new Date().toISOString(),
-        error: err instanceof Error ? err.message : String(err)
+        error: 'Failed to fetch data from portfolio service'
       };
     }
   }

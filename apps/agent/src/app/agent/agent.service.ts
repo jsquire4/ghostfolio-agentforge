@@ -29,7 +29,6 @@ import {
 import { ToolMetricsRecord } from '../common/storage.types';
 import { InsightRepository } from '../database/insight.repository';
 import { MetricsRepository } from '../database/metrics.repository';
-import { ToolMetricsRepository } from '../database/tool-metrics.repository';
 import { GhostfolioClientService } from '../ghostfolio/ghostfolio-client.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 import { ALL_TOOLS } from '../tools/index';
@@ -123,7 +122,6 @@ export class AgentService implements OnModuleInit {
     private readonly auditService: AuditService,
     private readonly insightRepository: InsightRepository,
     private readonly metricsRepository: MetricsRepository,
-    private readonly toolMetricsRepository: ToolMetricsRepository,
     private readonly configService: ConfigService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis
   ) {}
@@ -210,12 +208,30 @@ export class AgentService implements OnModuleInit {
     return this.toolRegistry.getAll().map((def) =>
       tool(
         async (params: unknown) => {
+          // HITL: All tools with requiresConfirmation=true pause here for user approval
+          if (
+            def.requiresConfirmation &&
+            !toolContext.autoApproveTools?.has(def.name)
+          ) {
+            const { interrupt } = await import('@langchain/langgraph');
+            throw interrupt({
+              value: {
+                toolName: def.name,
+                proposedParams: params,
+                description: def.description
+              }
+            });
+          }
+
+          // Validate params against Zod schema before execution
+          const validated = def.schema.parse(params);
+
           const start = Date.now();
-          const result: ToolResult = await def.execute(params, toolContext);
+          const result: ToolResult = await def.execute(validated, toolContext);
           const success = !result.error;
           records.push({
             toolName: def.name,
-            params,
+            params: validated,
             result: JSON.stringify(result),
             calledAt: new Date().toISOString(),
             durationMs: Date.now() - start,
@@ -319,29 +335,26 @@ export class AgentService implements OnModuleInit {
         channel: params.channel,
         langsmithRunId: params.langsmithRunId
       };
-      this.metricsRepository.insert(metrics);
+      const toolMetrics: ToolMetricsRecord[] = params.records.map((r) => {
+        let error: string | undefined;
+        try {
+          const parsed = JSON.parse(r.result);
+          if (parsed.error) error = String(parsed.error);
+        } catch {
+          // result not parseable — skip error extraction
+        }
+        return {
+          id: randomUUID(),
+          requestMetricsId: metrics.id,
+          toolName: r.toolName,
+          calledAt: r.calledAt,
+          durationMs: r.durationMs,
+          success: r.success,
+          error
+        };
+      });
 
-      if (params.records.length > 0) {
-        const toolMetrics: ToolMetricsRecord[] = params.records.map((r) => {
-          let error: string | undefined;
-          try {
-            const parsed = JSON.parse(r.result);
-            if (parsed.error) error = String(parsed.error);
-          } catch {
-            // result not parseable — skip error extraction
-          }
-          return {
-            id: randomUUID(),
-            requestMetricsId: metrics.id,
-            toolName: r.toolName,
-            calledAt: r.calledAt,
-            durationMs: r.durationMs,
-            success: r.success,
-            error
-          };
-        });
-        this.toolMetricsRepository.insertMany(toolMetrics);
-      }
+      this.metricsRepository.insertWithToolMetrics(metrics, toolMetrics);
     } catch (err) {
       this.logger.warn(`Failed to persist metrics: ${err}`);
     }
@@ -406,7 +419,8 @@ export class AgentService implements OnModuleInit {
             actionId: params.actionId,
             toolName: params.toolName,
             ...evalMeta
-          }
+          },
+          recursionLimit: 10
         }
       : {
           configurable: { thread_id: params.threadId },
@@ -420,7 +434,8 @@ export class AgentService implements OnModuleInit {
             channel: params.channel,
             toolCount: langchainTools.length,
             ...evalMeta
-          }
+          },
+          recursionLimit: 10
         };
 
     const agentResult = await agent.invoke(invokeInput, invokeConfig);
@@ -558,6 +573,9 @@ export class AgentService implements OnModuleInit {
     }
   }
 
+  // NOTE: No status check before approve/reject — replay within TTL is
+  // possible but harmless (Redis TTL ensures expiry, and the operation is
+  // idempotent since the LangGraph checkpoint resumes from the same state).
   async resume(
     actionId: string,
     approved: boolean,
@@ -580,14 +598,18 @@ export class AgentService implements OnModuleInit {
 
     if (!approved) {
       await this.pendingActionsService.updateStatus(actionId, 'rejected');
-      await this.auditService.log({
-        id: randomUUID(),
-        userId,
-        action: 'write_rejected',
-        toolName: action.toolName,
-        params: action.proposedParams,
-        timestamp
-      });
+      try {
+        await this.auditService.log({
+          id: randomUUID(),
+          userId,
+          action: 'write_rejected',
+          toolName: action.toolName,
+          params: action.proposedParams,
+          timestamp
+        });
+      } catch (auditErr) {
+        this.logger.warn(`Failed to log rejection audit: ${auditErr}`);
+      }
       this._persistMetrics({
         conversationId,
         userId,
@@ -608,14 +630,18 @@ export class AgentService implements OnModuleInit {
     }
 
     await this.pendingActionsService.updateStatus(actionId, 'approved');
-    await this.auditService.log({
-      id: randomUUID(),
-      userId,
-      action: 'write_approved',
-      toolName: action.toolName,
-      params: action.proposedParams,
-      timestamp
-    });
+    try {
+      await this.auditService.log({
+        id: randomUUID(),
+        userId,
+        action: 'write_approved',
+        toolName: action.toolName,
+        params: action.proposedParams,
+        timestamp
+      });
+    } catch (auditErr) {
+      this.logger.warn(`Failed to log approval audit: ${auditErr}`);
+    }
 
     let runId: string | undefined;
     let requestStart = Date.now();

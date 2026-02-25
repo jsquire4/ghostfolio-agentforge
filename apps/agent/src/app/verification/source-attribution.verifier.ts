@@ -4,6 +4,10 @@ import {
   VerificationResult
 } from '../common/interfaces';
 
+// LIMITATION: Number matching is exact-string. Rounded or reformatted
+// numbers may produce false positives (flagged as unsourced). Fabricated
+// numbers that coincidentally appear in tool output will pass. This is
+// a heuristic, not a guarantee.
 export class SourceAttributionVerifier implements Verifier {
   name = 'source_attribution';
   order = 'A-0001';

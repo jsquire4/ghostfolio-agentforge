@@ -3,11 +3,13 @@ import { NotFoundException } from '@nestjs/common';
 import { makeEvalRunRecord } from '../../test-fixtures';
 import { EvalCaseResultRecord } from '../common/storage.types';
 import { EvalsRepository } from '../database/evals.repository';
+import { EvalRunnerService } from './eval-runner.service';
 import { EvalsController } from './evals.controller';
 
 describe('EvalsController', () => {
   let controller: EvalsController;
   let mockRepo: jest.Mocked<EvalsRepository>;
+  let mockRunner: jest.Mocked<EvalRunnerService>;
 
   beforeEach(() => {
     mockRepo = {
@@ -18,14 +20,28 @@ describe('EvalsController', () => {
       getCaseHistory: jest.fn().mockReturnValue([]),
       getLatestRun: jest.fn().mockReturnValue(undefined)
     } as unknown as jest.Mocked<EvalsRepository>;
-    controller = new EvalsController(mockRepo);
+    mockRunner = {
+      startRun: jest
+        .fn()
+        .mockReturnValue({ runId: 'run-123', status: 'started' }),
+      getEventStream: jest.fn(),
+      getStatus: jest.fn().mockReturnValue({ isRunning: false })
+    } as unknown as jest.Mocked<EvalRunnerService>;
+    controller = new EvalsController(mockRepo, mockRunner);
   });
 
-  it('runEvals returns CLI guidance message', () => {
+  it('runEvals delegates to EvalRunnerService', () => {
     const user = { userId: 'user-1', rawJwt: 'jwt' };
-    const result = controller.runEvals(user as any);
-    expect(result.status).toBe('not_supported');
-    expect(result.message).toContain('npm run eval');
+    const result = controller.runEvals(user as any, { tier: 'golden' });
+    expect(result.status).toBe('started');
+    expect(result.runId).toBe('run-123');
+    expect(mockRunner.startRun).toHaveBeenCalledWith('golden', undefined);
+  });
+
+  it('getStatus returns runner status', () => {
+    const user = { userId: 'user-1', rawJwt: 'jwt' };
+    controller.getStatus(user as any);
+    expect(mockRunner.getStatus).toHaveBeenCalled();
   });
 
   it('getResults returns recent runs from repo with defaults', () => {

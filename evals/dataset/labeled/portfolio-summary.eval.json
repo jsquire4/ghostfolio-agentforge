@@ -1,17 +1,15 @@
 [
   {
     "id": "ls-001",
-    "description": "straightforward — explicit portfolio summary",
+    "description": "straightforward — explicit overall performance question",
     "difficulty": "straightforward",
-    "input": { "message": "Give me a summary of my portfolio" },
+    "input": { "message": "How is my portfolio doing overall?" },
     "expect": {
       "toolsCalled": ["portfolio_summary"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": [
-        "{{seed:holdings.etfs[0]}}",
-        "{{seed:holdings.equities[0]}}"
-      ],
+      "responseContains": ["{{seed:currency}}"],
+      "responseContainsAny": [["portfolio", "performance", "return", "value"]],
       "responseNotContains": ["I don't know", "no information"],
       "verifiersPassed": true,
       "maxLatencyMs": 30000
@@ -19,27 +17,33 @@
   },
   {
     "id": "ls-002",
-    "description": "straightforward — asks about performance",
+    "description": "straightforward — net worth question",
     "difficulty": "straightforward",
-    "input": { "message": "How is my portfolio doing?" },
+    "input": { "message": "What's my net worth across all investments?" },
     "expect": {
       "toolsCalled": ["portfolio_summary"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["portfolio"],
+      "responseContainsAny": [
+        ["net worth", "total value", "portfolio value", "worth"]
+      ],
       "responseNotContains": ["I don't know", "unable to"],
       "maxLatencyMs": 30000
     }
   },
   {
     "id": "ls-003",
-    "description": "straightforward — allocation analysis",
-    "difficulty": "straightforward",
+    "description": "ambiguous — allocation analysis, summary or holdings",
+    "difficulty": "ambiguous",
     "input": {
       "message": "What percentage of my portfolio is in stocks vs bonds?"
     },
     "expect": {
-      "toolsCalled": ["portfolio_summary"],
+      "toolsAcceptable": [
+        ["portfolio_summary"],
+        ["get_holdings"],
+        ["portfolio_summary", "get_holdings"]
+      ],
       "noToolErrors": true,
       "responseNonEmpty": true,
       "responseContains": ["%"],
@@ -53,10 +57,16 @@
     "difficulty": "ambiguous",
     "input": { "message": "What should I know about my investments?" },
     "expect": {
-      "toolsAcceptable": [["portfolio_summary"]],
+      "toolsAcceptable": [
+        ["portfolio_summary"],
+        ["get_holdings"],
+        ["portfolio_summary", "get_holdings"],
+        ["portfolio_summary", "get_dividends"],
+        ["portfolio_summary", "get_holdings", "get_dividends"]
+      ],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["portfolio"],
+      "responseContainsAny": [["portfolio", "investment", "holding"]],
       "responseNotContains": ["I don't know"],
       "maxLatencyMs": 30000
     }

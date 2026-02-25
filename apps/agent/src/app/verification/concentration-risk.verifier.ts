@@ -57,6 +57,8 @@ function extractAllocations(toolCalls: ToolCallRecord[]): HoldingAllocation[] {
   return allocations;
 }
 
+// LIMITATION: Only flags individual positions >20% from tool data.
+// Does not verify whether the LLM's textual advice acknowledges concentration risk.
 export class ConcentrationRiskVerifier implements Verifier {
   name = 'concentration_risk';
   order = 'R-0001';
@@ -64,7 +66,7 @@ export class ConcentrationRiskVerifier implements Verifier {
   async verify(
     _response: string,
     toolCalls: ToolCallRecord[],
-    _channel?: string
+    _channel?: string // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<VerificationResult> {
     const warnings: string[] = [];
     const flags: string[] = [];

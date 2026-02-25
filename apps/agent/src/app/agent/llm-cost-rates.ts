@@ -1,4 +1,6 @@
 // Cost per 1M tokens (USD) — update when providers change pricing
+// NOTE: Unknown models fall back to DEFAULT_RATE ($1/$3 per 1M tokens).
+// Update COST_RATES when adding new model support to keep metrics accurate.
 const COST_RATES: Record<string, { inputPer1M: number; outputPer1M: number }> =
   {
     'gpt-4o-mini': { inputPer1M: 0.15, outputPer1M: 0.6 },

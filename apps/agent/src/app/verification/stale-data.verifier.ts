@@ -57,7 +57,7 @@ export class StaleDataVerifier implements Verifier {
   async verify(
     _response: string,
     toolCalls: ToolCallRecord[],
-    _channel?: string
+    _channel?: string // eslint-disable-line @typescript-eslint/no-unused-vars
   ): Promise<VerificationResult> {
     const warnings: string[] = [];
     const flags: string[] = [];
