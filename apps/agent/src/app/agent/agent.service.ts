@@ -26,7 +26,9 @@ import {
   ToolResult,
   UserToolContext
 } from '../common/interfaces';
+import { ToolMetricsRecord } from '../common/storage.types';
 import { MetricsRepository } from '../database/metrics.repository';
+import { ToolMetricsRepository } from '../database/tool-metrics.repository';
 import { GhostfolioClientService } from '../ghostfolio/ghostfolio-client.service';
 import { REDIS_CLIENT } from '../redis/redis.constants';
 import { ALL_TOOLS } from '../tools/index';
@@ -68,6 +70,7 @@ export class AgentService implements OnModuleInit {
     private readonly hitlMatrixService: HitlMatrixService,
     private readonly auditService: AuditService,
     private readonly metricsRepository: MetricsRepository,
+    private readonly toolMetricsRepository: ToolMetricsRepository,
     private readonly configService: ConfigService,
     @Inject(REDIS_CLIENT) private readonly redisClient: Redis
   ) {}
@@ -256,6 +259,28 @@ export class AgentService implements OnModuleInit {
         langsmithRunId
       };
       this.metricsRepository.insert(metrics);
+
+      if (records.length > 0) {
+        const toolMetrics: ToolMetricsRecord[] = records.map((r) => {
+          let error: string | undefined;
+          try {
+            const parsed = JSON.parse(r.result);
+            if (parsed.error) error = String(parsed.error);
+          } catch {
+            // result not parseable — skip error extraction
+          }
+          return {
+            id: randomUUID(),
+            requestMetricsId: metrics.id,
+            toolName: r.toolName,
+            calledAt: r.calledAt,
+            durationMs: r.durationMs,
+            success: r.success,
+            error
+          };
+        });
+        this.toolMetricsRepository.insertMany(toolMetrics);
+      }
     } catch (err) {
       this.logger.warn(`Failed to persist metrics: ${err}`);
     }

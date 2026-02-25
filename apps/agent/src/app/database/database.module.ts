@@ -7,6 +7,7 @@ import { EvalsRepository } from './evals.repository';
 import { FeedbackRepository } from './feedback.repository';
 import { InsightRepository } from './insight.repository';
 import { MetricsRepository } from './metrics.repository';
+import { ToolMetricsRepository } from './tool-metrics.repository';
 
 @Global()
 @Module({
@@ -16,7 +17,8 @@ import { MetricsRepository } from './metrics.repository';
     AuditRepository,
     FeedbackRepository,
     MetricsRepository,
-    EvalsRepository
+    EvalsRepository,
+    ToolMetricsRepository
   ],
   imports: [ConfigModule],
   providers: [
@@ -25,7 +27,8 @@ import { MetricsRepository } from './metrics.repository';
     AuditRepository,
     FeedbackRepository,
     MetricsRepository,
-    EvalsRepository
+    EvalsRepository,
+    ToolMetricsRepository
   ]
 })
 export class DatabaseModule {}

@@ -60,6 +60,16 @@ export interface EvalRunRecord {
   runAt: string;
 }
 
+export interface ToolMetricsRecord {
+  id: string;
+  requestMetricsId: string;
+  toolName: string;
+  calledAt: string;
+  durationMs: number;
+  success: boolean;
+  error?: string;
+}
+
 export interface EvalCaseResultRecord {
   id: string;
   runId: string;

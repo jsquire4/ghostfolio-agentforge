@@ -113,6 +113,26 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
       `CREATE INDEX IF NOT EXISTS idx_request_metrics_requestedAt ON request_metrics(requestedAt)`
     );
 
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_metrics (
+        id                TEXT PRIMARY KEY,
+        requestMetricsId  TEXT NOT NULL,
+        toolName          TEXT NOT NULL,
+        calledAt          TEXT NOT NULL,
+        durationMs        INTEGER NOT NULL,
+        success           INTEGER NOT NULL,
+        error             TEXT,
+        FOREIGN KEY (requestMetricsId) REFERENCES request_metrics(id)
+      )
+    `);
+
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_requestMetricsId ON tool_metrics(requestMetricsId)`
+    );
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_tool_metrics_toolName ON tool_metrics(toolName)`
+    );
+
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_audit_log_userId ON audit_log(userId)`
     );

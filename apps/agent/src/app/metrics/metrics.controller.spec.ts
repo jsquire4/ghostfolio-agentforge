@@ -1,6 +1,7 @@
 import { Test } from '@nestjs/testing';
 
 import { MetricsRepository } from '../database/metrics.repository';
+import { ToolMetricsRepository } from '../database/tool-metrics.repository';
 import { MetricsController } from './metrics.controller';
 
 describe('MetricsController', () => {
@@ -9,6 +10,10 @@ describe('MetricsController', () => {
     getByUser: jest.Mock;
     getAggregateByUser: jest.Mock;
     getAggregateAll: jest.Mock;
+  };
+  let mockToolMetricsRepo: {
+    getToolSummary: jest.Mock;
+    getToolPerformance: jest.Mock;
   };
 
   const user = { userId: 'user-1', rawJwt: 'jwt' };
@@ -34,9 +39,33 @@ describe('MetricsController', () => {
       })
     };
 
+    mockToolMetricsRepo = {
+      getToolSummary: jest.fn().mockReturnValue([
+        {
+          toolName: 'portfolio-summary',
+          callCount: 10,
+          avgDurationMs: 200,
+          successRate: 0.9
+        }
+      ]),
+      getToolPerformance: jest.fn().mockReturnValue([
+        {
+          id: 'tm-1',
+          requestMetricsId: 'req-1',
+          toolName: 'portfolio-summary',
+          calledAt: '2025-06-15T12:00:00.000Z',
+          durationMs: 200,
+          success: true
+        }
+      ])
+    };
+
     const module = await Test.createTestingModule({
       controllers: [MetricsController],
-      providers: [{ provide: MetricsRepository, useValue: mockMetricsRepo }]
+      providers: [
+        { provide: MetricsRepository, useValue: mockMetricsRepo },
+        { provide: ToolMetricsRepository, useValue: mockToolMetricsRepo }
+      ]
     }).compile();
 
     controller = module.get(MetricsController);
@@ -67,5 +96,37 @@ describe('MetricsController', () => {
     const result = controller.getAdminSummary();
     expect(mockMetricsRepo.getAggregateAll).toHaveBeenCalled();
     expect(result.totalRequests).toBe(100);
+  });
+
+  it('getToolSummary returns aggregated tool stats', () => {
+    const result = controller.getToolSummary();
+    expect(mockToolMetricsRepo.getToolSummary).toHaveBeenCalled();
+    expect(result).toHaveLength(1);
+    expect(result[0].toolName).toBe('portfolio-summary');
+    expect(result[0].callCount).toBe(10);
+  });
+
+  it('getToolPerformance calls getToolPerformance with default limit', () => {
+    controller.getToolPerformance('portfolio-summary');
+    expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
+      'portfolio-summary',
+      50
+    );
+  });
+
+  it('getToolPerformance passes parsed limit', () => {
+    controller.getToolPerformance('portfolio-summary', '10');
+    expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
+      'portfolio-summary',
+      10
+    );
+  });
+
+  it('getToolPerformance falls back to default on non-numeric limit', () => {
+    controller.getToolPerformance('portfolio-summary', 'abc');
+    expect(mockToolMetricsRepo.getToolPerformance).toHaveBeenCalledWith(
+      'portfolio-summary',
+      50
+    );
   });
 });
