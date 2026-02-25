@@ -357,6 +357,18 @@ export class AgentService implements OnModuleInit {
           };
           await this.pendingActionsService.store(pendingAction, threadId);
 
+          this._persistMetrics(
+            conversationId,
+            userId,
+            requestStart,
+            tokenAccumulator,
+            records,
+            [],
+            [],
+            request.channel,
+            runId
+          );
+
           return {
             message: '',
             conversationId,
@@ -391,6 +403,15 @@ export class AgentService implements OnModuleInit {
       return chatResponse;
     } catch (err) {
       this.logger.error(`chat() error for user ${userId}: ${err}`);
+      this._persistMetrics(
+        conversationId,
+        userId,
+        requestStart,
+        tokenAccumulator,
+        records,
+        [],
+        []
+      );
       return {
         message:
           'I encountered an error processing your request. Please try again.',
@@ -435,6 +456,15 @@ export class AgentService implements OnModuleInit {
         params: action.proposedParams,
         timestamp
       });
+      this._persistMetrics(
+        conversationId,
+        userId,
+        Date.now(),
+        new TokenAccumulator(),
+        [],
+        [],
+        []
+      );
       return {
         message: 'Action cancelled.',
         conversationId,
@@ -526,6 +556,15 @@ export class AgentService implements OnModuleInit {
       return chatResponse;
     } catch (err) {
       this.logger.error(`resume() error for user ${userId}: ${err}`);
+      this._persistMetrics(
+        conversationId,
+        userId,
+        requestStart,
+        tokenAccumulator,
+        records,
+        [],
+        []
+      );
       return {
         message:
           'I encountered an error processing your request. Please try again.',
