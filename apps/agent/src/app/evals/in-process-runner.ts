@@ -228,7 +228,8 @@ export async function runGoldenSuite(
           estimatedCost: cost,
           ttftMs,
           latencyMs,
-          error: result.error
+          error: result.error,
+          toolsCalled: response.toolCalls.map((tc) => tc.toolName)
         }
       });
     } catch (err) {
@@ -249,7 +250,8 @@ export async function runGoldenSuite(
           passed: false,
           durationMs: result.durationMs,
           tier: 'golden',
-          error: result.error
+          error: result.error,
+          toolsCalled: []
         }
       });
     }
@@ -338,7 +340,9 @@ export async function runLabeledSuite(
           estimatedCost: cost,
           ttftMs,
           latencyMs,
-          error: result.error
+          error: result.error,
+          toolsCalled: response.toolCalls.map((tc) => tc.toolName),
+          difficulty: evalCase.difficulty
         }
       });
     } catch (err) {
@@ -359,7 +363,9 @@ export async function runLabeledSuite(
           passed: false,
           durationMs: result.durationMs,
           tier: 'labeled',
-          error: result.error
+          error: result.error,
+          toolsCalled: [],
+          difficulty: evalCase.difficulty
         }
       });
     }
@@ -390,6 +396,40 @@ export function countCases(tier: string = 'all', tool?: string): number {
     total += loadLabeledCases(tool).length;
   }
   return total;
+}
+
+/**
+ * List all eval cases (id, description, tier, difficulty) without running them.
+ */
+export function listCases(
+  tier: string = 'all',
+  tool?: string
+): { id: string; description: string; tier: string; difficulty?: string }[] {
+  const cases: {
+    id: string;
+    description: string;
+    tier: string;
+    difficulty?: string;
+  }[] = [];
+
+  if (tier === 'golden' || tier === 'all') {
+    for (const c of loadGoldenCases(tool)) {
+      cases.push({ id: c.id, description: c.description, tier: 'golden' });
+    }
+  }
+
+  if (tier === 'labeled' || tier === 'all') {
+    for (const c of loadLabeledCases(tool)) {
+      cases.push({
+        id: c.id,
+        description: c.description,
+        tier: 'labeled',
+        difficulty: c.difficulty
+      });
+    }
+  }
+
+  return cases;
 }
 
 /**

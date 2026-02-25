@@ -26,7 +26,7 @@ import { takeUntil } from 'rxjs/operators';
 interface LiveCaseResult {
   caseId: string;
   description: string;
-  passed: boolean;
+  status: 'pending' | 'passed' | 'failed';
   durationMs: number;
   tier: string;
   tokens?: number;
@@ -34,6 +34,16 @@ interface LiveCaseResult {
   latencyMs?: number;
   estimatedCost?: number;
   error?: string;
+  toolsCalled?: string[];
+  difficulty?: string;
+}
+
+interface BreakdownRow {
+  label: string;
+  passed: number;
+  failed: number;
+  total: number;
+  passRate: number;
 }
 
 interface AggregateStats {
@@ -165,30 +175,108 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
 
   public get progressPercent(): number {
     if (this.totalCases === 0) return 0;
-    return (this.liveResults.length / this.totalCases) * 100;
+    const completed = this.liveResults.filter(
+      (r) => r.status !== 'pending'
+    ).length;
+    return (completed / this.totalCases) * 100;
+  }
+
+  public get completedCount(): number {
+    return this.liveResults.filter((r) => r.status !== 'pending').length;
+  }
+
+  public get toolBreakdown(): BreakdownRow[] {
+    const map = new Map<string, { passed: number; failed: number }>();
+    for (const r of this.liveResults) {
+      if (r.status === 'pending' || !r.toolsCalled) continue;
+      for (const tool of r.toolsCalled) {
+        const entry = map.get(tool) || { passed: 0, failed: 0 };
+        if (r.status === 'passed') entry.passed++;
+        else entry.failed++;
+        map.set(tool, entry);
+      }
+    }
+    return Array.from(map.entries())
+      .map(([label, { passed, failed }]) => ({
+        label,
+        passed,
+        failed,
+        total: passed + failed,
+        passRate: passed / (passed + failed)
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
+  }
+
+  public get difficultyBreakdown(): BreakdownRow[] {
+    const map = new Map<string, { passed: number; failed: number }>();
+    for (const r of this.liveResults) {
+      if (r.status === 'pending' || !r.difficulty) continue;
+      const entry = map.get(r.difficulty) || { passed: 0, failed: 0 };
+      if (r.status === 'passed') entry.passed++;
+      else entry.failed++;
+      map.set(r.difficulty, entry);
+    }
+    return Array.from(map.entries())
+      .map(([label, { passed, failed }]) => ({
+        label,
+        passed,
+        failed,
+        total: passed + failed,
+        passRate: passed / (passed + failed)
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label));
   }
 
   private handleSseEvent(event: EvalSseEvent) {
     switch (event.type) {
-      case 'run_started':
+      case 'run_started': {
         this.totalCases = (event.data['totalCases'] as number) || 0;
+        const cases = event.data['cases'] as
+          | {
+              id: string;
+              description: string;
+              tier: string;
+              difficulty?: string;
+            }[]
+          | undefined;
+        if (cases?.length) {
+          this.liveResults = cases.map((c) => ({
+            caseId: c.id,
+            description: c.description,
+            status: 'pending' as const,
+            durationMs: 0,
+            tier: c.tier,
+            difficulty: c.difficulty
+          }));
+        }
         break;
+      }
 
-      case 'case_result':
-        this.liveResults.push({
-          caseId: event.data['caseId'] as string,
+      case 'case_result': {
+        const caseId = event.data['caseId'] as string;
+        const idx = this.liveResults.findIndex((r) => r.caseId === caseId);
+        const result: LiveCaseResult = {
+          caseId,
           description: event.data['description'] as string,
-          passed: event.data['passed'] as boolean,
+          status: (event.data['passed'] as boolean) ? 'passed' : 'failed',
           durationMs: event.data['durationMs'] as number,
           tier: event.data['tier'] as string,
           tokens: event.data['tokens'] as number,
           ttftMs: event.data['ttftMs'] as number,
           latencyMs: event.data['latencyMs'] as number,
           estimatedCost: event.data['estimatedCost'] as number,
-          error: event.data['error'] as string
-        });
+          error: event.data['error'] as string,
+          toolsCalled: event.data['toolsCalled'] as string[],
+          difficulty: event.data['difficulty'] as string
+        };
+        if (idx >= 0) {
+          this.liveResults[idx] = result;
+        } else {
+          this.liveResults.push(result);
+        }
         this.recomputeAggregateStats();
         break;
+      }
 
       case 'run_complete':
         this.runSummary = {
@@ -226,7 +314,7 @@ export class GfAgentEvalPanelComponent implements OnInit, OnDestroy {
   }
 
   private recomputeAggregateStats() {
-    const results = this.liveResults;
+    const results = this.liveResults.filter((r) => r.status !== 'pending');
     const count = results.length;
     if (count === 0) {
       this.aggregateStats = this.emptyStats();

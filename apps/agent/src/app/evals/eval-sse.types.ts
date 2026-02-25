@@ -22,6 +22,8 @@ export interface CaseResultData {
   ttftMs?: number;
   latencyMs?: number;
   error?: string;
+  toolsCalled?: string[];
+  difficulty?: string;
 }
 
 export interface SuiteCompleteData {
@@ -40,9 +42,18 @@ export interface RunCompleteData {
   reportUrl?: string;
 }
 
+export interface EvalCaseManifest {
+  id: string;
+  description: string;
+  tier: string;
+  difficulty?: string;
+}
+
 export interface RunStartedData {
   runId: string;
   tier: string;
   tool?: string;
   startedAt: string;
+  totalCases: number;
+  cases: EvalCaseManifest[];
 }

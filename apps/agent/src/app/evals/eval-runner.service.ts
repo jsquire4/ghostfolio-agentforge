@@ -12,7 +12,7 @@ import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
 import { EvalsRepository } from '../database/evals.repository';
 import { EvalSseEvent } from './eval-sse.types';
 import { EvalSuiteResult } from './eval.types';
-import { countCases, runEvals } from './in-process-runner';
+import { listCases, runEvals } from './in-process-runner';
 
 const EVAL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SSE_SUBSCRIBERS = 10;
@@ -83,7 +83,8 @@ export class EvalRunnerService implements OnModuleDestroy {
       `Starting in-process eval run ${runId}: tier=${tier}, tool=${tool ?? 'all'}`
     );
 
-    const totalCases = countCases(tier, tool);
+    const cases = listCases(tier, tool);
+    const totalCases = cases.length;
 
     this.events$.next({
       type: 'run_started',
@@ -92,6 +93,7 @@ export class EvalRunnerService implements OnModuleDestroy {
         tier,
         tool,
         totalCases,
+        cases,
         startedAt: this.activeRun.startedAt.toISOString()
       }
     });
