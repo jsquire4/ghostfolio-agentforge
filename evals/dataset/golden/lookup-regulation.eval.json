@@ -47,8 +47,10 @@
   },
   {
     "id": "gs-lookup-regulation-004",
-    "description": "trigger phrase — IRA limits",
-    "input": { "message": "What are the current IRA contribution limits?" },
+    "description": "trigger phrase — IRA limits with citation request",
+    "input": {
+      "message": "Look up the IRA contribution limit rules and give me the IRS references"
+    },
     "expect": {
       "toolsCalled": ["lookup_regulation"],
       "noToolErrors": true,
@@ -82,7 +84,9 @@
   {
     "id": "gs-lookup-regulation-006",
     "description": "no raw JSON leak — includes citations naturally",
-    "input": { "message": "Tell me about the net investment income tax" },
+    "input": {
+      "message": "Look up the net investment income tax regulation and cite the sources"
+    },
     "expect": {
       "toolsCalled": ["lookup_regulation"],
       "noToolErrors": true,

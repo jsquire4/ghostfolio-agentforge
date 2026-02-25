@@ -31,30 +31,80 @@ Built for Gauntlet Week 2 · Forked from [Ghostfolio](https://ghostfol.io)
 - LLM routing: GPT-4o-mini (simple) · Claude Sonnet (complex)
 - Conversation state via Redis · Insights persisted in SQLite
 
-## Quick Start
+## Quick Start (Docker)
+
+The entire stack runs in Docker. Three commands to a working agent:
 
 ```bash
-# One-command setup: prompts for OpenAI key + LangSmith key, starts Docker, seeds DB + eval user
+# 1. Clone and configure
+git clone https://github.com/YOUR_ORG/gfaf.git && cd gfaf
+cp .env.example .env
+```
+
+Edit `.env` and fill in the required values:
+
+| Variable            | Required | Description                               |
+| ------------------- | -------- | ----------------------------------------- |
+| `OPENAI_API_KEY`    | Yes      | OpenAI API key for agent LLM calls        |
+| `POSTGRES_PASSWORD` | Yes      | Any strong password                       |
+| `REDIS_PASSWORD`    | Yes      | Any strong password                       |
+| `ACCESS_TOKEN_SALT` | Yes      | Random string (`openssl rand -base64 32`) |
+| `JWT_SECRET_KEY`    | Yes      | Random string (`openssl rand -base64 32`) |
+| `LANGSMITH_API_KEY` | No       | Enables LangSmith trace observability     |
+
+```bash
+# 2. Start everything (Postgres, Redis, Ghostfolio, Agent)
+docker compose -f docker/docker-compose.yml up -d
+
+# 3. Seed the eval user with demo portfolio data
+npm run database:setup
+npm run eval:seed        # creates eval user, writes GHOSTFOLIO_API_TOKEN to .env
+```
+
+Once running:
+
+| Service       | URL                                 | Description                   |
+| ------------- | ----------------------------------- | ----------------------------- |
+| Ghostfolio UI | http://localhost:3333               | Portfolio management frontend |
+| Agent API     | http://localhost:8000               | AI agent endpoints            |
+| Agent Health  | http://localhost:8000/api/v1/health | Health check                  |
+
+```bash
+# Verify the agent is up and tools are registered
+curl http://localhost:8000/api/v1/health
+curl http://localhost:8000/api/v1/tools
+
+# Chat with the agent
+curl -X POST http://localhost:8000/api/v1/chat \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer <your-jwt>" \
+  -d '{"message": "How is my portfolio doing?"}'
+
+# Run golden evals to validate the full pipeline
+npm run eval:golden
+```
+
+### Automated Setup (Alternative)
+
+```bash
+# One-command setup: prompts for keys, starts Docker, seeds DB + eval user
 npm run setup
 
 # Start the agent
 npm run start:agent
-
-# Run evals
-npm run eval:golden
 ```
 
-`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key and optional LangSmith API key (for trace observability), starts Docker (Postgres, Redis, Ghostfolio), runs database migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI), and builds the agent. If `.env` already exists, it skips what's already configured.
+`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key and optional LangSmith API key, starts Docker, runs migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI, BND, VXUS), and builds the agent. If `.env` already exists, it skips what's already configured.
 
 <details>
-<summary>Manual setup (if you prefer step-by-step)</summary>
+<summary>Manual setup without Docker (local Node.js)</summary>
+
+Requires Node.js 20+, PostgreSQL 15+, and Redis 7+.
 
 ```bash
 cp .env.example .env
-# Edit .env → set OPENAI_API_KEY + fill in passwords/salts
-# Optional: set LANGSMITH_API_KEY for trace observability (see Observability section)
+# Edit .env → set OPENAI_API_KEY, database URLs, passwords/salts
 
-docker compose -f docker/docker-compose.yml up -d
 npm run database:setup
 npm run eval:seed        # creates eval user + writes GHOSTFOLIO_API_TOKEN to .env
 npm run build:agent
@@ -62,6 +112,21 @@ npm run start:agent
 ```
 
 </details>
+
+## Agent Tools
+
+The agent ships with 6 tools that cover portfolio analysis, market data, compliance, and regulatory guidance:
+
+| Tool                | Category | Description                                                   |
+| ------------------- | -------- | ------------------------------------------------------------- |
+| `portfolio_summary` | read     | Pre-formatted portfolio overview from Ghostfolio              |
+| `market_data`       | read     | Current prices and historical performance for any ticker      |
+| `get_holdings`      | read     | Detailed breakdown of portfolio positions with allocation     |
+| `get_dividends`     | read     | Dividend payment history with date, amount, and totals        |
+| `check_wash_sale`   | analysis | Detects IRS wash sale rule violations in transaction history  |
+| `lookup_regulation` | read     | IRS/SEC/FINRA regulation lookup with citations and references |
+
+Tools are registered via a single barrel export (`tools/tools.exports.ts`) and auto-discovered by the system prompt builder at runtime.
 
 ## Development
 

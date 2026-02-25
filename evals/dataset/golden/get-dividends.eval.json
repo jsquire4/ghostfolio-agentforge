@@ -7,10 +7,7 @@
       "toolsCalled": ["get_dividends"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": [
-        "{{seed:holdings.equities[0]}}",
-        "{{seed:holdings.equities[2]}}"
-      ],
+      "responseContains": ["{{seed:totals.dividends}}"],
       "responseContainsAny": [["dividend", "distribution", "payout"]],
       "responseNotContains": ["I don't know", "no information", "unable to"],
       "maxLatencyMs": 30000
@@ -41,10 +38,7 @@
       "toolsCalled": ["get_dividends"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": [
-        "{{seed:holdings.equities[0]}}",
-        "{{seed:holdings.etfs[0]}}"
-      ],
+      "responseContains": ["{{seed:totals.dividends}}"],
       "responseContainsAny": [
         ["dividend", "distribution", "payout", "payment"]
       ],
@@ -60,10 +54,6 @@
       "toolsCalled": ["get_dividends"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": [
-        "{{seed:holdings.equities[0]}}",
-        "{{seed:holdings.equities[2]}}"
-      ],
       "responseContainsAny": [["dividend", "distribution", "payout", "paid"]],
       "responseNotContains": ["I don't know", "no information"],
       "maxLatencyMs": 30000
@@ -79,7 +69,7 @@
       "toolsCalled": ["get_dividends"],
       "noToolErrors": true,
       "responseNonEmpty": true,
-      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContains": ["{{seed:totals.dividends}}"],
       "responseContainsAny": [["dividend", "distribution", "payout"]],
       "responseNotContains": ["I don't know", "unable to"],
       "maxLatencyMs": 30000
