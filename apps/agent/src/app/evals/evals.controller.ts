@@ -11,8 +11,7 @@ import {
   Post,
   Query,
   Res,
-  Sse,
-  UseGuards
+  Sse
 } from '@nestjs/common';
 import { IsIn, IsOptional, IsString, MaxLength } from 'class-validator';
 import { Response } from 'express';
@@ -23,7 +22,6 @@ import { finalize } from 'rxjs/operators';
 
 import { AuthUser } from '../common/auth.types';
 import { CurrentUser } from '../common/decorators/current-user.decorator';
-import { AdminGuard } from '../common/guards/admin.guard';
 import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
 import { EvalsRepository } from '../database/evals.repository';
 import { EvalRunnerService } from './eval-runner.service';
@@ -48,7 +46,6 @@ export class EvalsController {
   ) {}
 
   @Post('run')
-  @UseGuards(AdminGuard)
   public runEvals(
     @CurrentUser() _user: AuthUser,
     @Body() dto: RunEvalsDto
@@ -57,7 +54,6 @@ export class EvalsController {
   }
 
   @Sse('stream')
-  @UseGuards(AdminGuard)
   public streamEvents(): Observable<MessageEvent> {
     const stream = this.evalRunner.getEventStream();
     return stream.pipe(
@@ -87,7 +83,6 @@ export class EvalsController {
   }
 
   @Get('reports/:filename')
-  @UseGuards(AdminGuard)
   public getReport(@Param('filename') filename: string, @Res() res: Response) {
     // Sanitize: only allow alphanumeric, hyphens, underscores, dots
     if (!/^[\w\-.]+\.html$/.test(filename)) {
