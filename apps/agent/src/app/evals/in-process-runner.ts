@@ -69,7 +69,8 @@ async function getJwt(): Promise<string> {
 
   const apiToken = process.env.GHOSTFOLIO_API_TOKEN;
   const ghostfolioUrl =
-    process.env.GHOSTFOLIO_BASE_URL || 'http://localhost:3333';
+    process.env.GHOSTFOLIO_BASE_URL ||
+    `http://localhost:${process.env.PORT || '3333'}`;
 
   if (apiToken) {
     console.log(
