@@ -123,6 +123,7 @@ export class HtmlTemplateMiddleware implements NestMiddleware {
     const rootUrl = process.env.ROOT_URL || environment.rootUrl;
 
     if (
+      path.startsWith('/agent-api/') ||
       path.startsWith('/api/') ||
       path.startsWith(STORYBOOK_PATH) ||
       this.isFileRequest(path) ||

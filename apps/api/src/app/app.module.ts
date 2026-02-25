@@ -15,7 +15,12 @@ import {
 } from '@ghostfolio/common/config';
 
 import { BullModule } from '@nestjs/bull';
-import { MiddlewareConsumer, Module, NestModule } from '@nestjs/common';
+import {
+  MiddlewareConsumer,
+  Module,
+  NestModule,
+  RequestMethod
+} from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { EventEmitterModule } from '@nestjs/event-emitter';
 import { ScheduleModule } from '@nestjs/schedule';
@@ -48,6 +53,7 @@ import { HealthModule } from './health/health.module';
 import { ImportModule } from './import/import.module';
 import { InfoModule } from './info/info.module';
 import { LogoModule } from './logo/logo.module';
+import { AgentProxyMiddleware } from './middleware/agent-proxy.middleware';
 import { OrderModule } from './order/order.module';
 import { PlatformModule } from './platform/platform.module';
 import { PortfolioModule } from './portfolio/portfolio.module';
@@ -105,7 +111,12 @@ import { UserModule } from './user/user.module';
     RedisCacheModule,
     ScheduleModule.forRoot(),
     ServeStaticModule.forRoot({
-      exclude: ['/.well-known/*wildcard', '/api/*wildcard', '/sitemap.xml'],
+      exclude: [
+        '/.well-known/*wildcard',
+        '/agent-api/*wildcard',
+        '/api/*wildcard',
+        '/sitemap.xml'
+      ],
       rootPath: join(__dirname, '..', 'client'),
       serveStaticOptions: {
         setHeaders: (res) => {
@@ -143,6 +154,10 @@ import { UserModule } from './user/user.module';
 })
 export class AppModule implements NestModule {
   public configure(consumer: MiddlewareConsumer) {
+    consumer
+      .apply(AgentProxyMiddleware)
+      .forRoutes({ path: 'agent-api/*wildcard', method: RequestMethod.ALL });
+
     consumer.apply(HtmlTemplateMiddleware).forRoutes('*wildcard');
   }
 }

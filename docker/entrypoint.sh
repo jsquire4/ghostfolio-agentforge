@@ -8,5 +8,8 @@ npx prisma migrate deploy
 echo "Seeding the database"
 npx prisma db seed
 
+echo "Starting the agent"
+node /ghostfolio/apps/agent/main.js &
+
 echo "Starting the server"
 exec node main
