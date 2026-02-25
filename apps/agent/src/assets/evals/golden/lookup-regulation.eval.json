@@ -1,0 +1,123 @@
+[
+  {
+    "id": "gs-lookup-regulation-001",
+    "description": "trigger phrase — capital gains tax rules",
+    "input": { "message": "What are the rules on capital gains taxes?" },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["capital gain", "capital gains"],
+        ["short-term", "long-term", "short term", "long term"],
+        ["irs.gov", "IRS"]
+      ],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-002",
+    "description": "trigger phrase — wash sale rule explanation",
+    "input": { "message": "Explain the wash sale rule to me" },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["wash sale", "Section 1091"],
+        ["30 day", "30-day"]
+      ],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-003",
+    "description": "trigger phrase — qualified dividend taxation",
+    "input": { "message": "What's the tax treatment for qualified dividends?" },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [["qualified dividend"], ["0%", "15%", "20%"]],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-004",
+    "description": "trigger phrase — IRA limits with citation request",
+    "input": {
+      "message": "Look up the IRA contribution limit rules and give me the IRS references"
+    },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["$7,000", "$8,000"],
+        ["IRA", "Roth", "traditional"]
+      ],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-005",
+    "description": "rephrased — tax loss harvesting guidance",
+    "input": {
+      "message": "How does tax loss harvesting work and what are the rules?"
+    },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["tax loss harvest", "tax-loss harvest", "harvesting"],
+        ["$3,000", "offset", "wash sale"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-006",
+    "description": "no raw JSON leak — includes citations naturally",
+    "input": {
+      "message": "Look up the net investment income tax regulation and cite the sources"
+    },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [["NIIT", "3.8%", "net investment income"]],
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined",
+        "matchCount"
+      ],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-lookup-regulation-007",
+    "description": "disambiguation — regulation lookup not wash sale check",
+    "input": {
+      "message": "What does the IRS say about the wash sale rule? Just explain it, don't check my trades."
+    },
+    "expect": {
+      "toolsCalled": ["lookup_regulation"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["wash sale", "Section 1091"],
+        ["IRS", "irs.gov"]
+      ],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  }
+]

@@ -1,0 +1,122 @@
+[
+  {
+    "id": "gs-check-wash-sale-001",
+    "description": "trigger phrase — direct wash sale question",
+    "input": { "message": "Do I have any wash sale issues with AAPL?" },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [
+        ["wash sale", "30 day", "30-day", "Section 1091"]
+      ],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-002",
+    "description": "trigger phrase — tax implications of selling",
+    "input": {
+      "message": "Are there any tax implications if I sell my AAPL shares?"
+    },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [["wash sale", "tax", "IRS"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-003",
+    "description": "trigger phrase — safe to sell check",
+    "input": {
+      "message": "Is it safe to sell my MSFT from a wash sale perspective?"
+    },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[2]}}"],
+      "responseContainsAny": [
+        ["wash sale", "30 day", "30-day", "violation", "safe", "clear"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-004",
+    "description": "rephrased — check for wash sale violations",
+    "input": {
+      "message": "Check my AAPL transactions for wash sale violations"
+    },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [["wash sale", "violation", "transaction", "30"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-005",
+    "description": "rephrased — wash sale risk assessment",
+    "input": {
+      "message": "Am I at risk of a wash sale on any of my recent trades?"
+    },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["wash sale", "30 day", "30-day", "risk", "violation"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-006",
+    "description": "no raw JSON leak — includes regulatory context naturally",
+    "input": { "message": "Run a wash sale check on AAPL" },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined",
+        "regulatoryContext"
+      ],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-check-wash-sale-007",
+    "description": "includes IRS regulatory references",
+    "input": {
+      "message": "Does selling AAPL create any wash sale problems? Include the relevant tax rules."
+    },
+    "expect": {
+      "toolsCalled": ["check_wash_sale"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [
+        ["Section 1091", "Publication 550", "IRS"],
+        ["irs.gov", "law.cornell.edu"]
+      ],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  }
+]

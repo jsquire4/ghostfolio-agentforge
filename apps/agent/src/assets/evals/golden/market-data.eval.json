@@ -1,0 +1,114 @@
+[
+  {
+    "id": "gs-market-data-001",
+    "description": "trigger phrase — current price single ticker",
+    "input": { "message": "What's the current price of NVDA?" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["NVDA"],
+      "responseContainsAny": [["price", "trading", "worth", "valued"]],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-002",
+    "description": "trigger phrase — performance with time range",
+    "input": { "message": "How has META performed over the past year?" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["META"],
+      "responseContainsAny": [
+        ["performance", "return", "gain", "loss", "change"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-003",
+    "description": "trigger phrase — multiple tickers",
+    "input": { "message": "Get me quotes for JPM, DIS, and NFLX" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["JPM", "DIS", "NFLX"],
+      "responseContainsAny": [["price", "quote", "trading", "market"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-004",
+    "description": "trigger phrase — crypto asset with time range",
+    "input": { "message": "Show me Bitcoin's performance this week" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["Bitcoin", "BTC"],
+        ["performance", "change", "return", "price"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-005",
+    "description": "trigger phrase — long time horizon",
+    "input": { "message": "What's the 5-year performance of COST?" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["COST"],
+      "responseContainsAny": [["performance", "return", "growth", "change"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-006",
+    "description": "rephrased — casual company name instead of ticker",
+    "input": { "message": "How much does a share of Google cost right now?" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["GOOGL", "GOOG", "Google"],
+        ["price", "cost", "trading", "worth"]
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-market-data-007",
+    "description": "no JSON leak — response is natural language",
+    "input": { "message": "Show me stock quotes for Tesla and Amazon" },
+    "expect": {
+      "toolsCalled": ["market_data"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContainsAny": [
+        ["TSLA", "Tesla"],
+        ["AMZN", "Amazon"]
+      ],
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined",
+        "dataSource"
+      ],
+      "maxLatencyMs": 30000
+    }
+  }
+]

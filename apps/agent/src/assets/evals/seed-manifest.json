@@ -1,0 +1,25 @@
+{
+  "holdings": {
+    "equities": ["AAPL", "GOOGL", "MSFT", "AMZN"],
+    "etfs": ["VTI", "BND", "VXUS"],
+    "all": ["AAPL", "GOOGL", "MSFT", "AMZN", "VTI", "BND", "VXUS"]
+  },
+  "quantities": {
+    "AAPL": { "bought": 10, "sold": 3, "current": 7 },
+    "GOOGL": { "bought": 5, "current": 5 },
+    "MSFT": { "bought": 8, "current": 8 },
+    "AMZN": { "bought": 3, "current": 3 },
+    "VTI": { "bought": 15, "current": 15 },
+    "BND": { "bought": 20, "current": 20 },
+    "VXUS": { "bought": 10, "current": 10 }
+  },
+  "totals": {
+    "dividends": "$30.05",
+    "interest": "$81.25",
+    "fees": "$24.00",
+    "cash": "$10,000",
+    "realizedGainAAPL": "$127.51",
+    "tradingFees": "$19.96"
+  },
+  "currency": "USD"
+}

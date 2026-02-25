@@ -1,0 +1,135 @@
+[
+  {
+    "id": "gs-get-holdings-001",
+    "description": "trigger phrase — what stocks do I own",
+    "input": { "message": "What stocks do I own?" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.equities[1]}}",
+        "{{seed:holdings.equities[2]}}"
+      ],
+      "responseNotContains": ["I don't know", "no information", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-002",
+    "description": "trigger phrase — show me my holdings",
+    "input": { "message": "Show me my holdings" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.etfs[0]}}"
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-003",
+    "description": "trigger phrase — specific share count",
+    "input": { "message": "How many shares of AAPL do I have?" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:quantities.AAPL.current}}"
+      ],
+      "responseContainsAny": [["share", "position", "holding"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-004",
+    "description": "trigger phrase — cost basis query",
+    "input": { "message": "What's my cost basis on MSFT?" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[2]}}"],
+      "responseContainsAny": [["cost basis", "invested", "investment", "paid"]],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-005",
+    "description": "trigger phrase — position breakdown",
+    "input": { "message": "Break down my positions" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.etfs[0]}}"
+      ],
+      "responseContainsAny": [["position", "holding", "allocation"]],
+      "responseNotContains": ["I don't know", "unable to"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-006",
+    "description": "rephrased — what am I invested in",
+    "input": { "message": "List everything I'm invested in" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": [
+        "{{seed:holdings.equities[0]}}",
+        "{{seed:holdings.etfs[1]}}"
+      ],
+      "responseNotContains": ["I don't know", "no information"],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-007",
+    "description": "no JSON leak — response is natural language",
+    "input": { "message": "Show me all my stock positions" },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseNotContains": [
+        "fetchedAt",
+        "\"tool\":",
+        "\"error\":",
+        "undefined",
+        "assetSubClass"
+      ],
+      "maxLatencyMs": 30000
+    }
+  },
+  {
+    "id": "gs-get-holdings-008",
+    "description": "disambiguation — holdings detail not portfolio summary",
+    "input": {
+      "message": "What are my largest holdings and how much of each do I own?"
+    },
+    "expect": {
+      "toolsCalled": ["get_holdings"],
+      "noToolErrors": true,
+      "responseNonEmpty": true,
+      "responseContains": ["{{seed:holdings.equities[0]}}"],
+      "responseContainsAny": [
+        ["share", "quantity", "position", "holding", "unit"]
+      ],
+      "responseNotContains": ["I don't know"],
+      "maxLatencyMs": 30000
+    }
+  }
+]

@@ -4,15 +4,16 @@ import {
   Logger,
   OnModuleDestroy
 } from '@nestjs/common';
-import { spawn, ChildProcess } from 'child_process';
+import { execSync } from 'child_process';
 import { randomUUID } from 'crypto';
-import { existsSync } from 'fs';
-import { resolve } from 'path';
 import { Subject } from 'rxjs';
 
+import { EvalCaseResultRecord, EvalRunRecord } from '../common/storage.types';
+import { EvalsRepository } from '../database/evals.repository';
 import { EvalSseEvent } from './eval-sse.types';
+import { EvalSuiteResult } from './eval.types';
+import { runEvals } from './in-process-runner';
 
-const EVAL_JSON_PREFIX = 'EVAL_JSON:';
 const EVAL_TIMEOUT_MS = 10 * 60 * 1000; // 10 minutes
 const MAX_SSE_SUBSCRIBERS = 10;
 
@@ -21,7 +22,7 @@ interface RunState {
   tier: string;
   tool?: string;
   startedAt: Date;
-  process: ChildProcess;
+  abortController: AbortController;
   timeoutHandle: ReturnType<typeof setTimeout>;
 }
 
@@ -32,10 +33,12 @@ export class EvalRunnerService implements OnModuleDestroy {
   private activeRun: RunState | null = null;
   private subscriberCount = 0;
 
+  constructor(private readonly evalsRepo: EvalsRepository) {}
+
   onModuleDestroy() {
-    if (this.activeRun?.process) {
+    if (this.activeRun) {
       clearTimeout(this.activeRun.timeoutHandle);
-      this.activeRun.process.kill('SIGTERM');
+      this.activeRun.abortController.abort();
     }
     this.events$.complete();
   }
@@ -51,34 +54,19 @@ export class EvalRunnerService implements OnModuleDestroy {
     }
 
     const runId = randomUUID();
-    const repoRoot = this.findRepoRoot();
+    const abortController = new AbortController();
 
-    const args = ['run', 'eval', '--', tier, '--report'];
-    if (tool) {
-      args.push('--tool', tool);
-    }
-
-    this.logger.log(
-      `Starting eval run ${runId}: npm ${args.join(' ')} in ${repoRoot}`
-    );
-
-    const child = spawn('npm', args, {
-      cwd: repoRoot,
-      env: { ...process.env, EVAL_SSE_MODE: '1' },
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-
-    // Watchdog: kill eval after 10 minutes
     const timeoutHandle = setTimeout(() => {
-      if (this.activeRun?.process) {
+      if (this.activeRun) {
         this.logger.warn(
-          `Eval run ${runId} timed out after 10 minutes — killing`
+          `Eval run ${runId} timed out after 10 minutes — aborting`
         );
-        this.activeRun.process.kill('SIGTERM');
+        this.activeRun.abortController.abort();
         this.events$.next({
           type: 'run_error',
           data: { runId, error: 'Eval timed out after 10 minutes' }
         });
+        this.activeRun = null;
       }
     }, EVAL_TIMEOUT_MS);
 
@@ -87,9 +75,13 @@ export class EvalRunnerService implements OnModuleDestroy {
       tier,
       tool,
       startedAt: new Date(),
-      process: child,
+      abortController,
       timeoutHandle
     };
+
+    this.logger.log(
+      `Starting in-process eval run ${runId}: tier=${tier}, tool=${tool ?? 'all'}`
+    );
 
     this.events$.next({
       type: 'run_started',
@@ -101,80 +93,9 @@ export class EvalRunnerService implements OnModuleDestroy {
       }
     });
 
-    let stdoutBuffer = '';
-
-    child.stdout.on('data', (chunk: Buffer) => {
-      stdoutBuffer += chunk.toString();
-      const lines = stdoutBuffer.split('\n');
-      // Keep incomplete last line in buffer
-      stdoutBuffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (line.startsWith(EVAL_JSON_PREFIX)) {
-          try {
-            const event = JSON.parse(
-              line.slice(EVAL_JSON_PREFIX.length)
-            ) as EvalSseEvent;
-            this.events$.next(event);
-          } catch (err) {
-            this.logger.warn(`Failed to parse SSE event: ${line}`);
-          }
-        } else if (line.trim()) {
-          this.events$.next({ type: 'log', data: { message: line } });
-        }
-      }
-    });
-
-    child.stderr.on('data', (chunk: Buffer) => {
-      const message = chunk.toString().trim();
-      if (message) {
-        this.events$.next({ type: 'log', data: { message, stream: 'stderr' } });
-      }
-    });
-
-    child.on('close', (code) => {
-      clearTimeout(timeoutHandle);
-
-      // Flush remaining buffer
-      if (stdoutBuffer.trim()) {
-        if (stdoutBuffer.startsWith(EVAL_JSON_PREFIX)) {
-          try {
-            const event = JSON.parse(
-              stdoutBuffer.slice(EVAL_JSON_PREFIX.length)
-            ) as EvalSseEvent;
-            this.events$.next(event);
-          } catch {
-            this.events$.next({
-              type: 'log',
-              data: { message: stdoutBuffer }
-            });
-          }
-        } else {
-          this.events$.next({
-            type: 'log',
-            data: { message: stdoutBuffer }
-          });
-        }
-      }
-
-      if (code !== 0 && code !== null) {
-        this.events$.next({
-          type: 'run_error',
-          data: { runId, error: `Process exited with code ${code}` }
-        });
-      }
-
-      this.logger.log(`Eval run ${runId} finished with code ${code}`);
-      this.activeRun = null;
-    });
-
-    child.on('error', (err) => {
-      clearTimeout(timeoutHandle);
-      this.events$.next({
-        type: 'run_error',
-        data: { runId, error: err.message }
-      });
-      this.activeRun = null;
+    // Run async — don't block the HTTP response
+    this.executeRun(runId, tier, tool, abortController.signal).catch((err) => {
+      this.logger.error(`Eval run ${runId} failed: ${err.message}`);
     });
 
     return { runId, status: 'started' };
@@ -213,17 +134,122 @@ export class EvalRunnerService implements OnModuleDestroy {
     };
   }
 
-  private findRepoRoot(): string {
-    let dir = __dirname;
-    for (let i = 0; i < 10; i++) {
-      if (existsSync(resolve(dir, 'package.json'))) {
-        return dir;
+  // ── Private ─────────────────────────────────────────────────
+
+  private async executeRun(
+    originalRunId: string,
+    tier: string,
+    tool: string | undefined,
+    signal: AbortSignal
+  ): Promise<void> {
+    try {
+      const suites = await runEvals(tier, tool, (event) => {
+        if (!signal.aborted) {
+          this.events$.next(event);
+        }
+      });
+
+      if (signal.aborted) return;
+
+      const gitSha = this.getGitSha();
+      let suiteRunId = originalRunId;
+      let totalPassed = 0;
+      let totalFailed = 0;
+      let totalDurationMs = 0;
+      let totalEstimatedCost = 0;
+
+      // Persist each suite and emit suite_complete
+      for (const suite of suites) {
+        const { run, cases } = this.suiteToRecords(suite, suiteRunId, gitSha);
+        this.evalsRepo.insertRun(run);
+        this.evalsRepo.insertCaseResults(cases);
+
+        totalPassed += suite.totalPassed;
+        totalFailed += suite.totalFailed;
+        totalDurationMs += suite.totalDurationMs;
+        totalEstimatedCost += suite.estimatedCost ?? 0;
+
+        this.events$.next({
+          type: 'suite_complete',
+          data: {
+            tier: suite.tier,
+            totalPassed: suite.totalPassed,
+            totalFailed: suite.totalFailed,
+            totalDurationMs: suite.totalDurationMs,
+            estimatedCost: suite.estimatedCost
+          }
+        });
+
+        // Use a unique runId per suite when running 'all'
+        if (suites.length > 1) {
+          suiteRunId = randomUUID();
+        }
       }
-      const parent = resolve(dir, '..');
-      if (parent === dir) break;
-      dir = parent;
+
+      this.events$.next({
+        type: 'run_complete',
+        data: {
+          totalPassed,
+          totalFailed,
+          totalDurationMs,
+          estimatedCost: totalEstimatedCost
+        }
+      });
+
+      this.logger.log(
+        `Eval run complete: ${totalPassed} passed, ${totalFailed} failed`
+      );
+    } catch (err) {
+      if (!signal.aborted) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.events$.next({
+          type: 'run_error',
+          data: { runId: originalRunId, error: message }
+        });
+        this.logger.error(`Eval run ${originalRunId} error: ${message}`);
+      }
+    } finally {
+      clearTimeout(this.activeRun?.timeoutHandle);
+      this.activeRun = null;
     }
-    // Fallback to cwd
-    return process.cwd();
+  }
+
+  private suiteToRecords(
+    suite: EvalSuiteResult,
+    runId: string,
+    gitSha: string
+  ): { run: EvalRunRecord; cases: EvalCaseResultRecord[] } {
+    const total = suite.totalPassed + suite.totalFailed;
+    const run: EvalRunRecord = {
+      id: runId,
+      gitSha,
+      tier: suite.tier,
+      totalPassed: suite.totalPassed,
+      totalFailed: suite.totalFailed,
+      passRate: total > 0 ? suite.totalPassed / total : 0,
+      totalDurationMs: suite.totalDurationMs,
+      estimatedCost: suite.estimatedCost,
+      runAt: new Date().toISOString()
+    };
+
+    const cases: EvalCaseResultRecord[] = suite.cases.map((c) => ({
+      id: randomUUID(),
+      runId,
+      caseId: c.id,
+      passed: c.passed,
+      durationMs: c.durationMs,
+      error: c.error,
+      details: c.details
+    }));
+
+    return { run, cases };
+  }
+
+  private getGitSha(): string {
+    try {
+      return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+    } catch {
+      return process.env.GIT_SHA || 'unknown';
+    }
   }
 }
