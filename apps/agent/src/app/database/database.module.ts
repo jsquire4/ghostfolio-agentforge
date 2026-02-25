@@ -3,6 +3,7 @@ import { ConfigModule } from '@nestjs/config';
 
 import { AuditRepository } from './audit.repository';
 import { DatabaseService } from './database.service';
+import { EvalsRepository } from './evals.repository';
 import { FeedbackRepository } from './feedback.repository';
 import { InsightRepository } from './insight.repository';
 import { MetricsRepository } from './metrics.repository';
@@ -14,7 +15,8 @@ import { MetricsRepository } from './metrics.repository';
     InsightRepository,
     AuditRepository,
     FeedbackRepository,
-    MetricsRepository
+    MetricsRepository,
+    EvalsRepository
   ],
   imports: [ConfigModule],
   providers: [
@@ -22,7 +24,8 @@ import { MetricsRepository } from './metrics.repository';
     InsightRepository,
     AuditRepository,
     FeedbackRepository,
-    MetricsRepository
+    MetricsRepository,
+    EvalsRepository
   ]
 })
 export class DatabaseModule {}

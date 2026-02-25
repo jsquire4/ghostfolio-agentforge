@@ -1,4 +1,4 @@
-import { Body, Controller, Post } from '@nestjs/common';
+import { Body, Controller, Headers, Post } from '@nestjs/common';
 import {
   IsIn,
   IsNotEmpty,
@@ -37,8 +37,9 @@ export class ChatController {
   @Post()
   public async chat(
     @Body() body: ChatRequestDto,
-    @CurrentUser() user: AuthUser
+    @CurrentUser() user: AuthUser,
+    @Headers('x-eval-case-id') evalCaseId?: string
   ): Promise<ChatResponse> {
-    return this.agentService.chat(body, user.userId, user.rawJwt);
+    return this.agentService.chat(body, user.userId, user.rawJwt, evalCaseId);
   }
 }

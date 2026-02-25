@@ -89,18 +89,24 @@ async function healthCheck(): Promise<void> {
 async function chatRequest(
   message: string,
   conversationId: string,
-  jwt: string
+  jwt: string,
+  evalCaseId?: string
 ): Promise<{ response: ChatResponseShape; ttftMs: number; latencyMs: number }> {
   const url = `${AGENT_URL}/api/v1/chat`;
   const body = JSON.stringify({ message, conversationId });
   const start = Date.now();
 
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${jwt}`
+  };
+  if (evalCaseId) {
+    headers['X-Eval-Case-Id'] = evalCaseId;
+  }
+
   const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      Authorization: `Bearer ${jwt}`
-    },
+    headers,
     body,
     signal: AbortSignal.timeout(60000)
   });
@@ -270,7 +276,8 @@ export async function runLabeledEvals(
       const { response, ttftMs, latencyMs } = await chatRequest(
         evalCase.input.message,
         randomUUID(),
-        jwt
+        jwt,
+        evalCase.id
       );
 
       const errors = assertCase(evalCase, response, latencyMs);

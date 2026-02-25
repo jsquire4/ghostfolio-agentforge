@@ -34,6 +34,7 @@ export interface RequestMetrics {
   verifierWarningCount: number;
   verifierFlagCount: number;
   channel?: string;
+  langsmithRunId?: string;
 }
 
 export interface InsightRecord {
@@ -44,4 +45,27 @@ export interface InsightRecord {
   data?: Record<string, unknown>;
   createdAt: string;
   expiresAt?: string;
+}
+
+export interface EvalRunRecord {
+  id: string;
+  gitSha: string;
+  model?: string;
+  tier: 'golden' | 'labeled';
+  totalPassed: number;
+  totalFailed: number;
+  passRate: number;
+  totalDurationMs: number;
+  estimatedCost?: number;
+  runAt: string;
+}
+
+export interface EvalCaseResultRecord {
+  id: string;
+  runId: string;
+  caseId: string;
+  passed: boolean;
+  durationMs: number;
+  error?: string;
+  details?: Record<string, unknown>;
 }

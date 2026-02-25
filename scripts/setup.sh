@@ -62,6 +62,36 @@ if [ -f ".env" ]; then
       echo -e "  ${GREEN}✓${NC} OPENAI_API_KEY saved to .env"
     fi
   fi
+
+  # Check if LangSmith key is set
+  if grep -q '^LANGSMITH_API_KEY=' .env && ! grep -q '^LANGSMITH_API_KEY=<INSERT' .env; then
+    echo -e "  ${GREEN}✓${NC} LANGSMITH_API_KEY already configured"
+  else
+    echo ""
+    echo -e "  ${CYAN}Enter your LangSmith API key ${DIM}(optional — enables trace observability)${NC}:"
+    read -rp "  > " LS_KEY
+    if [ -z "$LS_KEY" ]; then
+      echo -e "  ${YELLOW}!${NC} No key entered — LangSmith tracing will be disabled"
+    else
+      if grep -q '^LANGSMITH_API_KEY=' .env; then
+        sed -i "s|^LANGSMITH_API_KEY=.*|LANGSMITH_API_KEY=$LS_KEY|" .env
+      else
+        echo "LANGSMITH_API_KEY=$LS_KEY" >> .env
+      fi
+      if ! grep -q '^LANGSMITH_PROJECT=' .env; then
+        echo "LANGSMITH_PROJECT=ghostfolio-agent" >> .env
+      fi
+      if ! grep -q '^LANGCHAIN_TRACING_V2=' .env; then
+        echo "LANGCHAIN_TRACING_V2=true" >> .env
+      else
+        sed -i "s|^LANGCHAIN_TRACING_V2=.*|LANGCHAIN_TRACING_V2=true|" .env
+      fi
+      if ! grep -q '^LANGCHAIN_CALLBACKS_BACKGROUND=' .env; then
+        echo "LANGCHAIN_CALLBACKS_BACKGROUND=true" >> .env
+      fi
+      echo -e "  ${GREEN}✓${NC} LANGSMITH_API_KEY saved + tracing enabled"
+    fi
+  fi
 else
   cp .env.example .env
   echo -e "  ${GREEN}✓${NC} Created .env from .env.example"
@@ -88,6 +118,28 @@ else
   else
     sed -i "s|OPENAI_API_KEY=<INSERT_OPENAI_API_KEY>|OPENAI_API_KEY=$OAI_KEY|" .env
     echo -e "  ${GREEN}✓${NC} OPENAI_API_KEY saved"
+  fi
+
+  # Prompt for LangSmith observability
+  echo ""
+  echo -e "  ${CYAN}Enter your LangSmith API key ${DIM}(optional — enables trace observability)${NC}:"
+  read -rp "  > " LS_KEY
+  if [ -z "$LS_KEY" ]; then
+    echo -e "  ${YELLOW}!${NC} No key entered — LangSmith tracing will be disabled"
+    sed -i "s|LANGCHAIN_TRACING_V2=true|LANGCHAIN_TRACING_V2=false|" .env
+  else
+    sed -i "s|LANGSMITH_API_KEY=<INSERT_LANGSMITH_API_KEY>|LANGSMITH_API_KEY=$LS_KEY|" .env
+    echo -e "  ${GREEN}✓${NC} LANGSMITH_API_KEY saved"
+
+    echo -e "  ${CYAN}Enter LangSmith project name ${DIM}(default: ghostfolio-agent)${NC}:"
+    read -rp "  > " LS_PROJECT
+    if [ -n "$LS_PROJECT" ]; then
+      sed -i "s|LANGSMITH_PROJECT=ghostfolio-agent|LANGSMITH_PROJECT=$LS_PROJECT|" .env
+      echo -e "  ${GREEN}✓${NC} LANGSMITH_PROJECT set to $LS_PROJECT"
+    else
+      echo -e "  ${GREEN}✓${NC} Using default project: ghostfolio-agent"
+    fi
+    echo -e "  ${GREEN}✓${NC} LangSmith tracing enabled"
   fi
 fi
 

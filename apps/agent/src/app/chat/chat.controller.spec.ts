@@ -37,7 +37,8 @@ describe('ChatController', () => {
     expect(mockAgentService.chat).toHaveBeenCalledWith(
       body,
       'user-1',
-      'jwt-token'
+      'jwt-token',
+      undefined
     );
   });
 
@@ -65,7 +66,24 @@ describe('ChatController', () => {
     expect(mockAgentService.chat).toHaveBeenCalledWith(
       expect.objectContaining({ conversationId: 'conv-123' }),
       'user-1',
-      'jwt'
+      'jwt',
+      undefined
+    );
+  });
+
+  it('passes X-Eval-Case-Id header as evalCaseId to AgentService', async () => {
+    const body: ChatRequestDto = Object.assign(new ChatRequestDto(), {
+      message: 'Hi'
+    });
+    const user = { userId: 'user-1', rawJwt: 'jwt' };
+
+    await controller.chat(body, user, 'eval-case-42');
+
+    expect(mockAgentService.chat).toHaveBeenCalledWith(
+      body,
+      'user-1',
+      'jwt',
+      'eval-case-42'
     );
   });
 });

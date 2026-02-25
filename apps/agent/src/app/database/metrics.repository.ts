@@ -22,8 +22,8 @@ export class MetricsRepository {
         id, userId, conversationId, requestedAt, totalLatencyMs,
         tokensIn, tokensOut, estimatedCostUsd, toolCallCount,
         toolSuccessCount, toolSuccessRate, verifierWarningCount,
-        verifierFlagCount, channel
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        verifierFlagCount, channel, langsmith_run_id
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     );
     stmt.run(
       record.id,
@@ -39,7 +39,8 @@ export class MetricsRepository {
       record.toolSuccessRate,
       record.verifierWarningCount,
       record.verifierFlagCount,
-      record.channel ?? null
+      record.channel ?? null,
+      record.langsmithRunId ?? null
     );
   }
 
@@ -104,7 +105,8 @@ export class MetricsRepository {
       toolSuccessRate: row.toolSuccessRate,
       verifierWarningCount: row.verifierWarningCount,
       verifierFlagCount: row.verifierFlagCount,
-      channel: row.channel ?? undefined
+      channel: row.channel ?? undefined,
+      langsmithRunId: row.langsmith_run_id ?? undefined
     };
   }
 

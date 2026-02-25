@@ -92,9 +92,19 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
         toolSuccessRate      REAL NOT NULL,
         verifierWarningCount INTEGER NOT NULL,
         verifierFlagCount    INTEGER NOT NULL,
-        channel              TEXT
+        channel              TEXT,
+        langsmith_run_id     TEXT
       )
     `);
+
+    try {
+      this.db.exec(
+        `ALTER TABLE request_metrics ADD COLUMN langsmith_run_id TEXT`
+      );
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : '';
+      if (!msg.includes('duplicate column name')) throw e;
+    }
 
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_request_metrics_userId ON request_metrics(userId)`
@@ -114,6 +124,44 @@ export class DatabaseService implements OnModuleInit, OnModuleDestroy {
     );
     this.db.exec(
       `CREATE INDEX IF NOT EXISTS idx_insights_generated_at ON insights(generated_at)`
+    );
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS eval_runs (
+        id               TEXT PRIMARY KEY,
+        gitSha           TEXT NOT NULL,
+        model            TEXT,
+        tier             TEXT NOT NULL,
+        totalPassed      INTEGER NOT NULL,
+        totalFailed      INTEGER NOT NULL,
+        passRate         REAL NOT NULL,
+        totalDurationMs  INTEGER NOT NULL,
+        estimatedCost    REAL,
+        runAt            TEXT NOT NULL
+      )
+    `);
+
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS eval_case_results (
+        id         TEXT PRIMARY KEY,
+        runId      TEXT NOT NULL,
+        caseId     TEXT NOT NULL,
+        passed     INTEGER NOT NULL,
+        durationMs INTEGER NOT NULL,
+        error      TEXT,
+        details    TEXT,
+        FOREIGN KEY (runId) REFERENCES eval_runs(id)
+      )
+    `);
+
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_eval_runs_runAt ON eval_runs(runAt)`
+    );
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_eval_case_results_runId ON eval_case_results(runId)`
+    );
+    this.db.exec(
+      `CREATE INDEX IF NOT EXISTS idx_eval_case_results_caseId ON eval_case_results(caseId)`
     );
 
     this.logger.log(`SQLite connected: ${dbPath}`);

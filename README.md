@@ -34,7 +34,7 @@ Built for Gauntlet Week 2 · Forked from [Ghostfolio](https://ghostfol.io)
 ## Quick Start
 
 ```bash
-# One-command setup: prompts for OpenAI key, starts Docker, seeds DB + eval user
+# One-command setup: prompts for OpenAI key + LangSmith key, starts Docker, seeds DB + eval user
 npm run setup
 
 # Start the agent
@@ -44,7 +44,7 @@ npm run start:agent
 npm run eval:golden
 ```
 
-`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key, starts Docker (Postgres, Redis, Ghostfolio), runs database migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI), and builds the agent. If `.env` already exists, it skips what's already configured.
+`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key and optional LangSmith API key (for trace observability), starts Docker (Postgres, Redis, Ghostfolio), runs database migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI), and builds the agent. If `.env` already exists, it skips what's already configured.
 
 <details>
 <summary>Manual setup (if you prefer step-by-step)</summary>
@@ -52,6 +52,7 @@ npm run eval:golden
 ```bash
 cp .env.example .env
 # Edit .env → set OPENAI_API_KEY + fill in passwords/salts
+# Optional: set LANGSMITH_API_KEY for trace observability (see Observability section)
 
 docker compose -f docker/docker-compose.yml up -d
 npm run database:setup
@@ -75,6 +76,31 @@ npm run test:agent
 ./scripts/test-chat.sh "What is my portfolio performance?"
 ```
 
+## Observability (LangSmith)
+
+Every agent request is traced end-to-end via [LangSmith](https://smith.langchain.com). Traces include the full reasoning chain (input, tool calls, LLM reasoning, output) plus structured metadata for filtering.
+
+**Setup:** Provide your LangSmith API key during `npm run setup`, or set these in `.env` manually:
+
+```env
+LANGSMITH_API_KEY=lsv2_pt_...
+LANGSMITH_PROJECT=ghostfolio-agent
+LANGCHAIN_TRACING_V2=true
+LANGCHAIN_CALLBACKS_BACKGROUND=true
+```
+
+**What's traced:**
+
+| Field                     | Example                  | Description                            |
+| ------------------------- | ------------------------ | -------------------------------------- |
+| `runName`                 | `chat:a1b2c3d4`          | Identifies request type + conversation |
+| `tags`                    | `agent`, `slack`, `eval` | Filter by channel, eval vs production  |
+| `metadata.userId`         | `user-abc`               | Links trace to Ghostfolio user         |
+| `metadata.conversationId` | `conv-xyz`               | Groups multi-turn conversations        |
+| `metadata.evalCaseId`     | `golden-01`              | Present only during eval runs          |
+
+Eval runs automatically tag traces with `eval` + the case ID, so you can filter eval traces from production in the LangSmith dashboard. Each request's `langsmithRunId` is also stored in the local metrics SQLite database for cross-referencing.
+
 ## Evals
 
 Two-tier eval system for validating agent behavior. Both tiers send prompts through the full agent loop (LLM + real Ghostfolio API). See [`evals/dataset/`](evals/dataset/) for all eval cases.
@@ -89,9 +115,9 @@ Two-tier eval system for validating agent behavior. Both tiers send prompts thro
 Both eval tiers require the full stack running (Ghostfolio + Agent) and a seeded user with portfolio data:
 
 ```bash
-# 1. Copy environment and add your OpenAI key
+# 1. Copy environment and add your keys
 cp .env.example .env
-# Edit .env → set OPENAI_API_KEY (required for agent LLM calls)
+# Edit .env → set OPENAI_API_KEY (required) + LANGSMITH_API_KEY (optional, for traces)
 
 # 2. Start infrastructure
 docker compose -f docker/docker-compose.yml up -d
@@ -232,6 +258,18 @@ We provide official container images hosted on [Docker Hub](https://hub.docker.c
 | `REDIS_PORT`                | `number`              |                       | The port where _Redis_ is running                                                                                                   |
 | `REQUEST_TIMEOUT`           | `number` (optional)   | `2000`                | The timeout of network requests to data providers in milliseconds                                                                   |
 | `ROOT_URL`                  | `string` (optional)   | `http://0.0.0.0:3333` | The root URL of the Ghostfolio application, used for generating callback URLs and external links.                                   |
+
+#### Agent (AgentForge)
+
+| Name                             | Type                 | Default Value        | Description                                                     |
+| -------------------------------- | -------------------- | -------------------- | --------------------------------------------------------------- |
+| `OPENAI_API_KEY`                 | `string`             |                      | OpenAI API key for agent LLM calls (GPT-4o-mini)                |
+| `GHOSTFOLIO_API_TOKEN`           | `string` (optional)  |                      | Ghostfolio security token for eval user (auto-set by eval:seed) |
+| `AGENT_DB_PATH`                  | `string` (optional)  | `./data/insights.db` | SQLite path for agent metrics and insights                      |
+| `LANGSMITH_API_KEY`              | `string` (optional)  |                      | LangSmith API key for trace observability                       |
+| `LANGSMITH_PROJECT`              | `string` (optional)  | `ghostfolio-agent`   | LangSmith project name for grouping traces                      |
+| `LANGCHAIN_TRACING_V2`           | `boolean` (optional) | `true`               | Enables LangChain tracing to LangSmith                          |
+| `LANGCHAIN_CALLBACKS_BACKGROUND` | `boolean` (optional) | `true`               | Sends trace callbacks in background (non-blocking)              |
 
 #### OpenID Connect OIDC (Experimental)
 

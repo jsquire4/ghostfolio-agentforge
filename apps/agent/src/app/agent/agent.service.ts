@@ -229,7 +229,8 @@ export class AgentService implements OnModuleInit {
     records: ToolCallRecord[],
     warnings: string[],
     flags: string[],
-    channel?: string
+    channel?: string,
+    langsmithRunId?: string
   ): void {
     try {
       const successCount = records.filter((r) => r.success).length;
@@ -251,7 +252,8 @@ export class AgentService implements OnModuleInit {
         toolSuccessRate: records.length > 0 ? successCount / records.length : 1,
         verifierWarningCount: warnings.length,
         verifierFlagCount: flags.length,
-        channel
+        channel,
+        langsmithRunId
       };
       this.metricsRepository.insert(metrics);
     } catch (err) {
@@ -266,7 +268,8 @@ export class AgentService implements OnModuleInit {
   async chat(
     request: ChatRequest,
     userId: string,
-    rawJwt: string
+    rawJwt: string,
+    evalCaseId?: string
   ): Promise<ChatResponse> {
     const requestStart = Date.now();
     const tokenAccumulator = new TokenAccumulator();
@@ -304,9 +307,26 @@ export class AgentService implements OnModuleInit {
       const langchainTools = this._buildLangChainTools(toolContext, records);
       const agent = this._buildAgent(systemPrompt, langchainTools);
 
+      const runId = randomUUID();
+      const evalTags = evalCaseId ? ['eval', evalCaseId] : [];
+      const evalMeta = evalCaseId ? { evalCaseId } : {};
+
       const result = await agent.invoke(
         { messages: [new HumanMessage(request.message)] },
-        { configurable: { thread_id: threadId }, callbacks: [tokenAccumulator] }
+        {
+          configurable: { thread_id: threadId },
+          callbacks: [tokenAccumulator],
+          runId,
+          runName: `chat:${conversationId.substring(0, 8)}`,
+          tags: ['agent', request.channel ?? 'default', ...evalTags],
+          metadata: {
+            userId,
+            conversationId,
+            channel: request.channel,
+            toolCount: langchainTools.length,
+            ...evalMeta
+          }
+        }
       );
 
       // Detect interrupt (HITL) — unique to chat()
@@ -365,7 +385,8 @@ export class AgentService implements OnModuleInit {
         records,
         chatResponse.warnings,
         chatResponse.flags,
-        request.channel
+        request.channel,
+        runId
       );
       return chatResponse;
     } catch (err) {
@@ -465,9 +486,23 @@ export class AgentService implements OnModuleInit {
       );
       const agent = this._buildAgent(systemPrompt, langchainTools);
 
+      const runId = randomUUID();
+
       const result = await agent.invoke(
         new Command({ resume: action.proposedParams }),
-        { configurable: { thread_id: threadId }, callbacks: [tokenAccumulator] }
+        {
+          configurable: { thread_id: threadId },
+          callbacks: [tokenAccumulator],
+          runId,
+          runName: `resume:${conversationId.substring(0, 8)}`,
+          tags: ['agent', 'resume'],
+          metadata: {
+            userId,
+            conversationId,
+            actionId,
+            toolName: action.toolName
+          }
+        }
       );
 
       const agentResponse = this._extractLastMessage(result);
@@ -484,7 +519,9 @@ export class AgentService implements OnModuleInit {
         tokenAccumulator,
         records,
         chatResponse.warnings,
-        chatResponse.flags
+        chatResponse.flags,
+        undefined,
+        runId
       );
       return chatResponse;
     } catch (err) {

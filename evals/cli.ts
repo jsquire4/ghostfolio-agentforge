@@ -9,6 +9,7 @@
 //   npm run eval coverage
 //   npm run eval rubric
 import { execSync, spawn } from 'child_process';
+import { randomUUID } from 'crypto';
 import { existsSync, mkdirSync } from 'fs';
 import { sign } from 'jsonwebtoken';
 import { platform } from 'os';
@@ -16,9 +17,16 @@ import { resolve } from 'path';
 
 import { runGoldenEvals } from './golden-runner';
 import { runLabeledEvals } from './labeled-runner';
+import { getCaseResultsForRun, getLatestRun, persistEvalRun } from './persist';
+import { detectRegressions, RegressionReport } from './regression';
 import { writeHtmlReport, writeJsonReport } from './report';
 import { captureSnapshot, PortfolioSnapshot, printSnapshot } from './snapshot';
-import { EvalCaseResult, EvalSuiteResult } from './types';
+import {
+  EvalCaseResult,
+  EvalCaseResultRecord,
+  EvalRunRecord,
+  EvalSuiteResult
+} from './types';
 
 // ── ANSI Helpers ────────────────────────────────────────────
 
@@ -253,6 +261,153 @@ function cmdRubric(): void {
   );
 }
 
+// ── Persistence + Regression ─────────────────────────────────
+
+function getGitSha(): string {
+  try {
+    return execSync('git rev-parse HEAD', { encoding: 'utf-8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
+
+function getDbPath(): string {
+  return process.env.AGENT_DB_PATH || resolve(__dirname, '../data/insights.db');
+}
+
+function suiteToRecords(
+  suite: EvalSuiteResult,
+  runId: string,
+  gitSha: string
+): { run: EvalRunRecord; cases: EvalCaseResultRecord[] } {
+  const total = suite.totalPassed + suite.totalFailed;
+  const run: EvalRunRecord = {
+    id: runId,
+    gitSha,
+    tier: suite.tier,
+    totalPassed: suite.totalPassed,
+    totalFailed: suite.totalFailed,
+    passRate: total > 0 ? suite.totalPassed / total : 0,
+    totalDurationMs: suite.totalDurationMs,
+    estimatedCost: suite.estimatedCost,
+    runAt: new Date().toISOString()
+  };
+
+  const cases: EvalCaseResultRecord[] = suite.cases.map((c) => ({
+    id: randomUUID(),
+    runId,
+    caseId: c.id,
+    passed: c.passed,
+    durationMs: c.durationMs,
+    error: c.error,
+    details: c.details
+  }));
+
+  return { run, cases };
+}
+
+function printRegressionReport(report: RegressionReport): void {
+  console.log(`\n${BOLD} Regression Report${RESET}`);
+  console.log(LINE);
+
+  if (
+    report.newlyFailing.length === 0 &&
+    report.newlyPassing.length === 0 &&
+    report.latencyRegressions.length === 0
+  ) {
+    console.log(`  ${CHECK} No regressions detected`);
+    if (report.passRateDelta !== 0) {
+      const sign = report.passRateDelta > 0 ? '+' : '';
+      console.log(
+        `  Pass rate delta: ${sign}${(report.passRateDelta * 100).toFixed(1)}%`
+      );
+    }
+    return;
+  }
+
+  if (report.newlyFailing.length > 0) {
+    console.log(
+      `\n  ${RED}Newly failing (${report.newlyFailing.length}):${RESET}`
+    );
+    for (const f of report.newlyFailing) {
+      console.log(`    ${CROSS} ${f.caseId}: ${f.error}`);
+    }
+  }
+
+  if (report.newlyPassing.length > 0) {
+    console.log(
+      `\n  ${GREEN}Newly passing (${report.newlyPassing.length}):${RESET}`
+    );
+    for (const p of report.newlyPassing) {
+      console.log(`    ${CHECK} ${p.caseId}`);
+    }
+  }
+
+  if (report.latencyRegressions.length > 0) {
+    console.log(
+      `\n  ${YELLOW}Latency regressions (${report.latencyRegressions.length}):${RESET}`
+    );
+    for (const l of report.latencyRegressions) {
+      console.log(
+        `    ! ${l.caseId}: ${formatMs(l.previousMs)} → ${formatMs(l.currentMs)}`
+      );
+    }
+  }
+
+  const deltaSign = report.passRateDelta > 0 ? '+' : '';
+  console.log(
+    `\n  Pass rate delta: ${deltaSign}${(report.passRateDelta * 100).toFixed(1)}%`
+  );
+}
+
+function persistAndDetectRegressions(suites: EvalSuiteResult[]): boolean {
+  const dbPath = getDbPath();
+  const gitSha = getGitSha();
+  let hasNewRegressions = false;
+
+  for (const suite of suites) {
+    const runId = randomUUID();
+    const { run, cases } = suiteToRecords(suite, runId, gitSha);
+
+    // Load previous run before persisting current
+    let previousRun: EvalRunRecord | undefined;
+    let previousCases: EvalCaseResultRecord[] = [];
+    try {
+      previousRun = getLatestRun(dbPath, suite.tier);
+      if (previousRun) {
+        previousCases = getCaseResultsForRun(dbPath, previousRun.id);
+      }
+    } catch (err) {
+      console.log(
+        `\n  ${DIM}Previous run data unavailable — skipping regression detection: ${err instanceof Error ? err.message : String(err)}${RESET}`
+      );
+    }
+
+    try {
+      persistEvalRun(dbPath, run, cases);
+      console.log(
+        `\n  ${GREEN}Persisted ${suite.tier} run to ${dbPath}${RESET} (${runId})`
+      );
+    } catch (err) {
+      console.log(
+        `\n  ${YELLOW}! Persistence failed:${RESET} ${err instanceof Error ? err.message : String(err)}`
+      );
+      continue;
+    }
+
+    // Regression detection
+    if (previousRun && previousCases.length > 0) {
+      const report = detectRegressions(cases, previousCases);
+      printRegressionReport(report);
+      if (report.newlyFailing.length > 0) {
+        hasNewRegressions = true;
+      }
+    }
+  }
+
+  return hasNewRegressions;
+}
+
 // ── Main ────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -342,6 +497,9 @@ async function main(): Promise<void> {
 
   printSummary(suites);
 
+  // Persist results and detect regressions
+  const hasNewRegressions = persistAndDetectRegressions(suites);
+
   // Portfolio snapshot (ground truth) — printed after evals so results show first
   if (snapshot) {
     printSnapshot(snapshot);
@@ -371,7 +529,7 @@ async function main(): Promise<void> {
   }
 
   const anyFailed = suites.some((s) => s.totalFailed > 0);
-  process.exit(anyFailed ? 1 : 0);
+  process.exit(anyFailed || hasNewRegressions ? 1 : 0);
 }
 
 main().catch((err) => {

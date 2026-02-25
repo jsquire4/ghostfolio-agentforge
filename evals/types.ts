@@ -2,6 +2,12 @@
 // Both golden and labeled hit the live agent via POST /api/v1/chat.
 // Golden = deterministic known-answer prompts, labeled = routing + quality.
 
+// Re-export persistence types for CLI use
+export type {
+  EvalRunRecord,
+  EvalCaseResultRecord
+} from '@ghostfolio/agent/app/common/storage.types';
+
 // ── Shared Chat Response ────────────────────────────────────
 
 export interface ChatResponseShape {
