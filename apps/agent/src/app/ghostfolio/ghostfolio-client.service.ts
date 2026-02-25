@@ -29,7 +29,7 @@ export class GhostfolioClientService implements IGhostfolioClient {
   constructor(config: ConfigService) {
     this.baseUrl = config.get<string>(
       'GHOSTFOLIO_BASE_URL',
-      'http://localhost:3333'
+      `http://localhost:${process.env.PORT || '3333'}`
     );
     const token = config.get<string>('GHOSTFOLIO_API_TOKEN', '');
     if (!token) {
