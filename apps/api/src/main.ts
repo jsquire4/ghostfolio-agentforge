@@ -16,6 +16,7 @@ import { NestFactory } from '@nestjs/core';
 import type { NestExpressApplication } from '@nestjs/platform-express';
 import { NextFunction, Request, Response } from 'express';
 import helmet from 'helmet';
+import { request as httpRequest } from 'node:http';
 
 import { AppModule } from './app/app.module';
 import { environment } from './environments/environment';
@@ -63,6 +64,38 @@ async function bootstrap() {
 
   // Support 10mb csv/json files for importing activities
   app.useBodyParser('json', { limit: '10mb' });
+
+  // Proxy /agent-api/* to the agent process running on port 8000
+  const agentHost = configService.get<string>('AGENT_HOST') || 'localhost';
+  const agentPort = configService.get<string>('AGENT_PORT') || '8000';
+
+  app.use('/agent-api', (req: Request, res: Response) => {
+    const targetPath = '/api' + req.url;
+
+    const proxyReq = httpRequest(
+      {
+        hostname: agentHost,
+        port: agentPort,
+        path: targetPath,
+        method: req.method,
+        headers: { ...req.headers, host: `${agentHost}:${agentPort}` }
+      },
+      (proxyRes) => {
+        res.writeHead(proxyRes.statusCode, proxyRes.headers);
+        proxyRes.pipe(res, { end: true });
+      }
+    );
+
+    proxyReq.on('error', (err) => {
+      Logger.error(`Agent proxy error: ${err.message}`, 'AgentProxy');
+
+      if (!res.headersSent) {
+        res.status(502).json({ error: 'Agent unavailable' });
+      }
+    });
+
+    req.pipe(proxyReq, { end: true });
+  });
 
   if (configService.get<string>('ENABLE_FEATURE_SUBSCRIPTION') === 'true') {
     app.use((req: Request, res: Response, next: NextFunction) => {

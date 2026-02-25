@@ -33,11 +33,30 @@ Built for Gauntlet Week 2 · Forked from [Ghostfolio](https://ghostfol.io)
 
 ## Quick Start (Docker)
 
-The entire stack runs in Docker. Three commands to a working agent:
+The entire stack runs in Docker. Requires Docker and Node.js 22+.
+
+### Option A: Automated Setup (Recommended)
 
 ```bash
-# 1. Clone and configure
-git clone https://github.com/YOUR_ORG/gfaf.git && cd gfaf
+git clone https://github.com/jsquire4/gf-AgentForge.git && cd gf-AgentForge
+npm install
+npm run setup
+```
+
+`npm run setup` walks you through everything interactively: creates `.env` with generated secrets, prompts for your OpenAI API key (and optional LangSmith key), starts Docker (Postgres, Redis, Ghostfolio), waits for health checks, runs database migrations and seeding, creates an eval user with a demo portfolio (AAPL, GOOGL, MSFT, AMZN, VTI, BND, VXUS), and builds the agent.
+
+After setup completes, start the agent:
+
+```bash
+npm run start:agent
+```
+
+### Option B: Manual Setup
+
+```bash
+# 1. Clone and install
+git clone https://github.com/jsquire4/gf-AgentForge.git && cd gf-AgentForge
+npm install
 cp .env.example .env
 ```
 
@@ -52,16 +71,31 @@ Edit `.env` and fill in the required values:
 | `JWT_SECRET_KEY`    | Yes      | Random string (`openssl rand -base64 32`) |
 | `LANGSMITH_API_KEY` | No       | Enables LangSmith trace observability     |
 
-```bash
-# 2. Start everything (Postgres, Redis, Ghostfolio, Agent)
-docker compose -f docker/docker-compose.yml up -d
+**Important:** The default `DATABASE_URL` in `.env.example` uses `@postgres:5432` (the Docker service hostname). This works for containers but not for host commands like `npm run database:setup`. Update it to `@localhost:5432` for running setup commands from your machine:
 
-# 3. Seed the eval user with demo portfolio data
-npm run database:setup
-npm run eval:seed        # creates eval user, writes GHOSTFOLIO_API_TOKEN to .env
+```
+DATABASE_URL=postgresql://user:YOUR_PASSWORD@localhost:5432/ghostfolio-db?connect_timeout=300&sslmode=prefer
 ```
 
-Once running:
+```bash
+# 2. Start infrastructure (Postgres, Redis, Ghostfolio)
+docker compose -f docker/docker-compose.yml up -d
+
+# 3. Wait for Ghostfolio to be healthy (~30s)
+until curl -sf http://localhost:3333/api/v1/health > /dev/null; do sleep 5; done
+
+# 4. Seed the database and create an eval user with demo portfolio
+npm run database:setup
+npm run eval:seed        # creates eval user, writes GHOSTFOLIO_API_TOKEN to .env
+
+# 5. Build and start the agent
+npm run build:agent
+npm run start:agent
+```
+
+### Verify Everything Works
+
+Once both Ghostfolio and the agent are running:
 
 | Service       | URL                                 | Description                   |
 | ------------- | ----------------------------------- | ----------------------------- |
@@ -80,38 +114,12 @@ curl -X POST http://localhost:8000/api/v1/chat \
   -H "Authorization: Bearer <your-jwt>" \
   -d '{"message": "How is my portfolio doing?"}'
 
+# Validate setup (checks all services, env vars, build artifacts)
+npm run eval:setup
+
 # Run golden evals to validate the full pipeline
 npm run eval:golden
 ```
-
-### Automated Setup (Alternative)
-
-```bash
-# One-command setup: prompts for keys, starts Docker, seeds DB + eval user
-npm run setup
-
-# Start the agent
-npm run start:agent
-```
-
-`npm run setup` handles everything: creates `.env` with generated secrets, prompts for your OpenAI API key and optional LangSmith API key, starts Docker, runs migrations, creates an eval user with demo portfolio data (AAPL, GOOGL, MSFT, AMZN, VTI, BND, VXUS), and builds the agent. If `.env` already exists, it skips what's already configured.
-
-<details>
-<summary>Manual setup without Docker (local Node.js)</summary>
-
-Requires Node.js 20+, PostgreSQL 15+, and Redis 7+.
-
-```bash
-cp .env.example .env
-# Edit .env → set OPENAI_API_KEY, database URLs, passwords/salts
-
-npm run database:setup
-npm run eval:seed        # creates eval user + writes GHOSTFOLIO_API_TOKEN to .env
-npm run build:agent
-npm run start:agent
-```
-
-</details>
 
 ## Agent Tools
 
