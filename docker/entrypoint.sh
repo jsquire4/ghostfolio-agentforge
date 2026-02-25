@@ -9,7 +9,8 @@ echo "Seeding the database"
 npx prisma db seed
 
 echo "Starting the agent"
-node /ghostfolio/apps/agent/main.js &
+mkdir -p /ghostfolio/apps/agent/data
+AGENT_DB_PATH=/ghostfolio/apps/agent/data/insights.db node /ghostfolio/apps/agent/main.js 2>&1 &
 
 echo "Starting the server"
 exec node main
